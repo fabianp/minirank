@@ -1,7 +1,25 @@
+"""
+The Isotron algorithm
+
+Reference: "The Isotron Algorithm: High-Dimensional Isotonic Regression",
+    Adam Tauman Kalai, Ravi Sastry
+"""
+
 import numpy as np
 from isotonic_regression import pav
 
 def isotron(X, y, max_iter=100):
+    """
+    Parameters
+    ----------
+    X : array, shape (n_features, n_samples)
+    y : array, shape (n_samples,)
+
+    Returns
+    -------
+    w : coefficients of the model
+    u : function u evaluated at Xw
+    """
     n_samples, n_features = X.shape
     w = np.zeros(n_features)
     u = y.copy()
