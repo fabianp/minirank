@@ -8,10 +8,10 @@ def isotron(X, y, max_iter=100):
     for i in range(max_iter):
         idx = np.argsort(np.dot(X, w))
         u = pav(y[idx])
-#        print a, y
-#        import ipdb; ipdb.set_trace()
         w += (1. / n_samples) * np.sum((y[idx] - u) * X[idx].T, 1)
-    return w, u
+    order_inv = np.zeros(len(y), dtype=np.int)
+    order_inv[idx] = np.arange(len(y))
+    return w, u[order_inv]
 
 if __name__ == '__main__':
     import pylab as pl
@@ -31,12 +31,12 @@ if __name__ == '__main__':
     y = np.array(y)
     X = np.array(X)
 
-    w1, u1 = isotron(X, y, max_iter=1000)
+    w1, u1 = isotron(X, y, max_iter=100)
     print "corr_coef : ", np.corrcoef(w, w1)[0, 1]
 
     z = np.dot(X, w)
     z1 = np.dot(X, w1)
     pl.scatter(z, y)
-    pl.scatter(np.sort(z), u1, color='red')
+    pl.scatter(z, u1, color='red')
     pl.show()
 
