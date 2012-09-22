@@ -109,7 +109,7 @@ class RankSVM(svm.SVC):
             super(RankSVM, self).fit(X_trans, y_trans)
         return self
 
-    def predict(self, X):
+    def rank(self, X):
         """
         Predict an ordering on X. For a list of n samples, this method
         returns a list from 0 to n-1 with the relative order of the rows of X.
@@ -127,14 +127,14 @@ class RankSVM(svm.SVC):
         if hasattr(self, 'coef_'):
             np.argsort(np.dot(X, self.coef_.T))
         else:
-            raise ValueError("Must call fit() prior to predict()")
+            raise ValueError("Must call fit() prior to rank()")
 
     def score(self, X, y):
         """
         Because we transformed into a balanced pairwise problem, chance level is at 0.5
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
-        return np.mean(super(RankSVM, self).predict(X_trans) == y_trans)
+        return np.mean(super(RankSVM, self).rank(X_trans) == y_trans)
 
 class RankLogistic(linear_model.LogisticRegression):
 
@@ -161,7 +161,7 @@ class RankLogistic(linear_model.LogisticRegression):
             super(RankLogistic, self).fit(X_trans, y_trans)
         return self
 
-    def predict(self, X):
+    def rank(self, X):
         """
         Predict an ordering on X. For a list of n samples, this method
         returns a list from 0 to n-1 with the relative order of the rows of X.
@@ -179,14 +179,14 @@ class RankLogistic(linear_model.LogisticRegression):
         if hasattr(self, 'coef_'):
             np.argsort(np.dot(X, self.coef_.T))
         else:
-            raise ValueError('Must call fit() prior to predict()')
+            raise ValueError('Must call fit() prior to rank()')
 
     def score(self, X, y):
         """
         Because we transformed into a balanced pairwise problem, chance level is at 0.5
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
-        return np.mean(super(RankLogistic, self).predict(X_trans) == y_trans)
+        return np.mean(super(RankLogistic, self).rank(X_trans) == y_trans)
 
 
 
@@ -210,5 +210,5 @@ if __name__ == '__main__':
     ridge = linear_model.RidgeCV(fit_intercept=False)
     ridge.fit(X[train], y[train])
     X_test_trans, y_test_trans, diff = transform_pairwise(X[test], y[test])
-    score = np.mean(np.sign(ridge.predict(X_test_trans)) == y_test_trans)
+    score = np.mean(np.sign(ridge.rank(X_test_trans)) == y_test_trans)
     print 'Performance of linear regression ', score
