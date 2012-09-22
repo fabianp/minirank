@@ -82,7 +82,8 @@ class RankSVM(svm.SVC):
                  shrinking=True, probability=False,
                  tol=1e-3, cache_size=200):
 
-        super(RankSVM, self).__init__(kernel='linear', degree=degree,
+        super(RankSVM, self).__init__(
+            kernel='linear', degree=degree,
             tol=tol, C=C, shrinking=shrinking, probability=probability,
             cache_size=cache_size)
 
@@ -104,7 +105,8 @@ class RankSVM(svm.SVC):
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
         if sample_weight:
-            super(RankSVM, self).fit(X_trans, y_trans, sample_weight=20 * np.abs(diff))
+            super(RankSVM, self).fit(
+                X_trans, y_trans, sample_weight=20 * np.abs(diff))
         else:
             super(RankSVM, self).fit(X_trans, y_trans)
         return self
@@ -131,10 +133,12 @@ class RankSVM(svm.SVC):
 
     def score(self, X, y):
         """
-        Because we transformed into a balanced pairwise problem, chance level is at 0.5
+        Because we transformed into a balanced pairwise problem,
+        chance level is at 0.5
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
         return np.mean(super(RankSVM, self).rank(X_trans) == y_trans)
+
 
 class RankLogistic(linear_model.LogisticRegression):
 
@@ -183,11 +187,11 @@ class RankLogistic(linear_model.LogisticRegression):
 
     def score(self, X, y):
         """
-        Because we transformed into a balanced pairwise problem, chance level is at 0.5
+        Because we transformed into a balanced pairwise problem,
+        chance level is at 0.5
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
         return np.mean(super(RankLogistic, self).rank(X_trans) == y_trans)
-
 
 
 if __name__ == '__main__':
