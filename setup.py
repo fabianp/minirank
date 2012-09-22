@@ -6,5 +6,5 @@ setup(name='ranking',
     author='Fabian Pedregosa',
     author_email='fabian@fseoane.net',
     url='',
-    py_modules=['ranksvm', 'isotron', 'isotonic_regression'],
+    py_modules=['ranksvm', 'isotron', 'isotonic_regression', 'datasets'],
 )
