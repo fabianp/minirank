@@ -1,4 +1,5 @@
 from distutils.core import setup
+from Cython.Build import cythonize
 
 setup(name='ranking',
     version='0.1',
@@ -6,5 +7,6 @@ setup(name='ranking',
     author='Fabian Pedregosa',
     author_email='fabian@fseoane.net',
     url='',
-    py_modules=['ranksvm', 'isotron', 'isotonic_regression'],
+    packages=['ranking'],
+    ext_modules = cythonize('ranking/sofia_ml.pyx')
 )
