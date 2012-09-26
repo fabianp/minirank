@@ -80,11 +80,12 @@ class RankSVM(svm.SVC):
     """
     def __init__(self, C=1.0, degree=3,
                  shrinking=True, probability=False,
-                 tol=1e-3, cache_size=200, scale_C=True):
+                 tol=1e-3, cache_size=200):
 
-        super(RankSVM, self).__init__(kernel='linear', degree=degree,
+        super(RankSVM, self).__init__(
+            kernel='linear', degree=degree,
             tol=tol, C=C, shrinking=shrinking, probability=probability,
-            cache_size=cache_size, scale_C=scale_C)
+            cache_size=cache_size)
 
     def fit(self, X, y, sample_weight=True):
         """
@@ -104,12 +105,13 @@ class RankSVM(svm.SVC):
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
         if sample_weight:
-            super(RankSVM, self).fit(X_trans, y_trans, sample_weight=20 * np.abs(diff))
+            super(RankSVM, self).fit(
+                X_trans, y_trans, sample_weight=20 * np.abs(diff))
         else:
             super(RankSVM, self).fit(X_trans, y_trans)
         return self
 
-    def predict(self, X):
+    def rank(self, X):
         """
         Predict an ordering on X. For a list of n samples, this method
         returns a list from 0 to n-1 with the relative order of the rows of X.
@@ -127,14 +129,16 @@ class RankSVM(svm.SVC):
         if hasattr(self, 'coef_'):
             np.argsort(np.dot(X, self.coef_.T))
         else:
-            raise ValueError("Must call fit() prior to predict()")
+            raise ValueError("Must call fit() prior to rank()")
 
     def score(self, X, y):
         """
-        Because we transformed into a balanced pairwise problem, chance level is at 0.5
+        Because we transformed into a balanced pairwise problem,
+        chance level is at 0.5
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
-        return np.mean(super(RankSVM, self).predict(X_trans) == y_trans)
+        return np.mean(super(RankSVM, self).rank(X_trans) == y_trans)
+
 
 class RankLogistic(linear_model.LogisticRegression):
 
@@ -161,7 +165,7 @@ class RankLogistic(linear_model.LogisticRegression):
             super(RankLogistic, self).fit(X_trans, y_trans)
         return self
 
-    def predict(self, X):
+    def rank(self, X):
         """
         Predict an ordering on X. For a list of n samples, this method
         returns a list from 0 to n-1 with the relative order of the rows of X.
@@ -179,92 +183,15 @@ class RankLogistic(linear_model.LogisticRegression):
         if hasattr(self, 'coef_'):
             np.argsort(np.dot(X, self.coef_.T))
         else:
-            raise ValueError("Must call fit() prior to predict()")
+            raise ValueError('Must call fit() prior to rank()')
 
     def score(self, X, y):
         """
-        Because we transformed into a balanced pairwise problem, chance level is at 0.5
+        Because we transformed into a balanced pairwise problem,
+        chance level is at 0.5
         """
         X_trans, y_trans, diff = transform_pairwise(X, y)
-        return np.mean(super(RankLogistic, self).predict(X_trans) == y_trans)
-
-
-def linear_rank(X, y, alphas):
-    """
-    Fit athe "value-regularized" linear method described in the paper
-    "On the consistency of Ranking Algorithms", Duchi et al.
-
-    Parameters
-    ----------
-    alpha: l2-term regularization
-    """
-
-    alphas = np.array(alphas)
-    U, s, Vt = linalg.svd(X, full_matrices=False)
-    Xp, yp, d = transform_pairwise(X, y)
-    #d = np.sign(d) * ((100 * d) ** 2)
-    #omega = 1. / ( 1e3 * X.shape[0] ** 2)
-    #omega = 1e-4
-    v =  np.dot(Vt, np.dot(d, Xp))
-    return np.dot(v / ((s ** 2) + alphas[:, np.newaxis]), Vt)
-
-
-def test_linear_rank():
-    X = np.random.randn(5, 5)
-    y = np.random.randn(5)
-    alphas = [.1, 1., 2.]
-    W = linear_rank(X, y, alphas)
-    Xp, yp, d = transform_pairwise(X, y)
-
-    # check KKT conditions
-    for i in range(3):
-        right = np.dot(np.dot(X.T, X) + alphas[i] * np.eye(5), W[i])
-        left = np.dot(Xp.T, d)
-        assert np.allclose(right, left)
-    print 'TESTS OK'
-
-
-
-class LinearRankCV(linear_model.base.LinearModel):
-    """
-    value-regularized linear method described in the paper
-    "On the consistency of Ranking Algorithms", Duchi et al.
-    """
-    def __init__(self, alphas):
-        self.alphas = alphas
-        self.fit_intercept = True
-
-    def fit(self, X, y):
-        X, y, X_mean, y_mean, X_std =\
-        self._center_data(X, y, self.fit_intercept,
-            False, True)
-        cv = cross_validation.KFold(X.shape[0], 5)
-        scores = np.zeros(len(self.alphas))
-        for train, test in cv:
-            Xp, yp, dp = transform_pairwise(X[train], y[train])
-            W = linear_rank(X[train], y[train], self.alphas)
-            Xt, yt, dt = transform_pairwise(X[test], y[test])
-            if not yt.size:
-                continue
-
-            train_score = dp * np.dot(Xp, W.T).T
-            assert train_score.shape == (len(self.alphas), Xp.shape[0])
-            #print(np.mean(dp * np.dot(Xp, W.T).T > 0, 1))
-
-            scores += np.mean(dt * np.dot(Xt, W.T).T > 0, 1)
-
-        self.best_alpha = self.alphas[np.argmax(scores)]
-        self.coef_ = linear_rank(X, y, [self.best_alpha])[0] # learn on whole dataset
-        self._set_intercept(X_mean, y_mean, X_std)
-        return self
-
-    def score(self, X, y):
-        Xt, yt, dt = transform_pairwise(X, y)
-        return np.mean(np.sign(np.dot(Xt, self.coef_.T)) == yt)
-
-    def transform(self, X):
-        return np.dot(X, self.coef_)[:, np.newaxis]
-
+        return np.mean(super(RankLogistic, self).rank(X_trans) == y_trans)
 
 
 if __name__ == '__main__':
@@ -273,23 +200,11 @@ if __name__ == '__main__':
 
     np.random.seed(0)
     n_samples, n_features = 300, 5
-    true_coef = np.random.randn(n_features)
-    X = np.random.randn(n_samples, n_features)
-    noise = np.random.randn(n_samples) / np.linalg.norm(true_coef)
-    y = np.dot(X, true_coef)
-    y = np.sqrt(y - np.min(y))  # add non-linearities
-    y += .1 * noise  # add noise
+    from datasets import sigmoid_with_noise
+    X, y, true_coef = sigmoid_with_noise(n_samples, n_features)
     Y = np.c_[y, np.mod(np.arange(n_samples), 5)]  # add query fake id
     cv = cross_validation.KFold(n_samples, 5)
     train, test = iter(cv).next()
-
-    # make a simple plot out of it
-    import pylab as pl
-    pl.scatter(np.dot(X, true_coef), y)
-    pl.title('Data to be learned')
-    pl.xlabel('<X, coef>')
-    pl.ylabel('y')
-    pl.show()
 
     # print the performance of ranking
     rank_svm = RankSVM().fit(X[train], Y[train])
@@ -299,5 +214,5 @@ if __name__ == '__main__':
     ridge = linear_model.RidgeCV(fit_intercept=False)
     ridge.fit(X[train], y[train])
     X_test_trans, y_test_trans, diff = transform_pairwise(X[test], y[test])
-    score = np.mean(np.sign(ridge.predict(X_test_trans)) == y_test_trans)
+    score = np.mean(np.sign(ridge.rank(X_test_trans)) == y_test_trans)
     print 'Performance of linear regression ', score

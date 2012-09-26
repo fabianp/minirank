@@ -50,7 +50,7 @@ if __name__ == '__main__':
     X = np.array(X)
 
     w1, u1 = isotron(X, y, max_iter=100)
-    print "corr_coef : ", np.corrcoef(w, w1)[0, 1]
+    print("corr_coef : %s" % np.corrcoef(w, w1)[0, 1])
 
     z = np.dot(X, w)
     z1 = np.dot(X, w1)
