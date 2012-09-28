@@ -14,7 +14,6 @@ cdef extern from "src/sofia-ml-methods.h":
         SfDataSet(bool)
         SfDataSet(string, int, bool)
 
-
     cdef cppclass SfWeightVector:
         SfWeightVector(int)
         string AsString()
@@ -24,7 +23,6 @@ cdef extern from "src/sofia-ml-methods.h" namespace "sofia_ml":
     cdef enum LearnerType:
         PEGASOS, MARGIN_PERCEPTRON, PASSIVE_AGGRESSIVE, LOGREG_PEGASOS,
         LOGREG, LMS_REGRESSION, SGD_SVM, ROMMA
-
 
     cdef enum EtaType:
         BASIC_ETA
@@ -36,11 +34,12 @@ cdef extern from "src/sofia-ml-methods.h" namespace "sofia_ml":
           EtaType,
           float, float, int, SfWeightVector*)
 
-def train(train_file, int n_features, bool fit_intercept=True):
+def train(train_file, int n_features, float alpha, int max_iter=100, bool fit_intercept=True):
     cdef SfDataSet *data = new SfDataSet(train_file, BUFFER_MB, fit_intercept)
     cdef SfWeightVector *w = new SfWeightVector(n_features)
-    StochasticRankLoop(deref(data), SGD_SVM, BASIC_ETA, 0., 0., 100, w)
-    cdef i
+    cdef float c = 0.0
+    StochasticRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c, max_iter, w)
+    cdef int i
     cdef np.ndarray[ndim=1, dtype=np.float64_t] coef = np.empty(n_features)
     for i in range(n_features):
         coef[i] = w.ValueOf(i)
