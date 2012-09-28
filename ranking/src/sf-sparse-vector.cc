@@ -128,7 +128,11 @@ void SfSparseVector::DieFormat(const string& reason) {
 void SfSparseVector::Init(const char* in_string) {
   int length = strlen(in_string);
   if (length == 0) DieFormat("Empty example string.");
- 
+
+  // Ignore comments
+  if (in_string[0] == '#')
+    return;
+
   // Get class label.
   if (!sscanf(in_string, "%f", &y_))
     DieFormat("Class label must be real number.");
