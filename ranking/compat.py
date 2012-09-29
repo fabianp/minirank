@@ -10,9 +10,7 @@ class RankSVM(base.BaseEstimator):
         self.max_iter = max_iter
 
     def fit(self, X, y, query_id=None):
-        print 'training '
         self.coef_ = train(X, y, self.alpha, query_id, max_iter=self.max_iter)
-        print 'done'
         return self
 
     def rank(self, X):
