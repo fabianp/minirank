@@ -34,12 +34,12 @@ cdef extern from "src/sofia-ml-methods.h" namespace "sofia_ml":
           EtaType,
           float, float, int, SfWeightVector*)
 
-def train(train_file, int n_features, float alpha, int max_iter=100, bool fit_intercept=True):
-    cdef SfDataSet *data = new SfDataSet(train_file, BUFFER_MB, fit_intercept)
+def train(train_data, int n_features, float alpha, int max_iter=100, bool fit_intercept=True):
+    cdef SfDataSet *data = new SfDataSet(train_data, BUFFER_MB, fit_intercept)
     cdef SfWeightVector *w = new SfWeightVector(n_features)
     cdef float c = 0.0
-    StochasticRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c, max_iter, w)
     cdef int i
+    StochasticRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c, max_iter, w)
     cdef np.ndarray[ndim=1, dtype=np.float64_t] coef = np.empty(n_features)
     for i in range(n_features):
         coef[i] = w.ValueOf(i)
