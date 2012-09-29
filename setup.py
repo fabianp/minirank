@@ -17,10 +17,3 @@ setup(name='ranking',
         sources=sources,
         language='c++', include_dirs=[np.get_include()])],
 )
-
-
-
-#modules_list = create_extension_list("*_cpp.pyx",exclude=["*_c.pyx"])
-#for module in modules_list:
-#    module.language = "c++"
-#ext_modules = cythonize(pyx_modules)
