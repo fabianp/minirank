@@ -29,17 +29,23 @@ cdef extern from "src/sofia-ml-methods.h" namespace "sofia_ml":
         PEGASOS_ETA
         CONSTANT
 
-    void StochasticRankLoop(SfDataSet training_set,
-          LearnerType,
-          EtaType,
+    void StochasticRankLoop(SfDataSet, LearnerType, EtaType,
           float, float, int, SfWeightVector*)
 
-def train(train_data, int n_features, float alpha, int max_iter=100, bool fit_intercept=True):
+    void StochasticClassificationAndRankLoop(SfDataSet, LearnerType, EtaType,
+        float, float, float, int num_iters, SfWeightVector*)
+
+def train(train_data, int n_features, float alpha, int max_iter, bool fit_intercept,
+          model, float step_probability):
     cdef SfDataSet *data = new SfDataSet(train_data, BUFFER_MB, fit_intercept)
     cdef SfWeightVector *w = new SfWeightVector(n_features)
     cdef float c = 0.0
     cdef int i
-    StochasticRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c, max_iter, w)
+    if model == 'rank':
+        StochasticRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c, max_iter, w)
+    elif model == 'combined-ranking':
+        StochasticClassificationAndRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c,
+            step_probability, max_iter, w)
     cdef np.ndarray[ndim=1, dtype=np.float64_t] coef = np.empty(n_features)
     for i in range(n_features):
         coef[i] = w.ValueOf(i)
