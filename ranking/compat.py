@@ -16,7 +16,9 @@ class RankSVM(base.BaseEstimator):
     def rank(self, X):
         return np.argsort(np.dot(X, self.coef_))
 
+    # just so that GridSearchCV doesn't complain
+    predict = rank
+
     def score(self, X, y):
-        ord_est = self.rank(X)
-        tau, _ = stats.kendalltau(ord_est, y)
+        tau, _ = stats.kendalltau(np.dot(X, self.coef_), y)
         return tau
