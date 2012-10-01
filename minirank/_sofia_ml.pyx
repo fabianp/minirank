@@ -1,5 +1,5 @@
 # distutils: language = c++
-# distutils: sources = ranking/src/sofia-ml-methods.cc ranking/src/{sf-weight-vector.cc,sf-data-set.cc}
+# distutils: sources = minirank/src/sofia-ml-methods.cc ranking/src/{sf-weight-vector.cc,sf-data-set.cc}
 from cython.operator cimport dereference as deref
 from libcpp cimport bool
 from libcpp.string cimport string

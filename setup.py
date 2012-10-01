@@ -3,7 +3,7 @@ from Cython.Distutils import build_ext
 import glob
 import numpy as np
 
-sources =['ranking/_sofia_ml.pyx'] + glob.glob('ranking/src/*.cc')
+sources =['minirank/_sofia_ml.pyx'] + glob.glob('minirank/src/*.cc')
 
 setup(name='ranking',
     version='0.1',
@@ -11,9 +11,9 @@ setup(name='ranking',
     author='Fabian Pedregosa',
     author_email='fabian@fseoane.net',
     url='',
-    packages=['ranking'],
+    packages=['minirank'],
     cmdclass = {'build_ext': build_ext},
-    ext_modules = [Extension('ranking._sofia_ml',
+    ext_modules = [Extension('minirank._sofia_ml',
         sources=sources,
         language='c++', include_dirs=[np.get_include()])],
 )
