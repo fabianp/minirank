@@ -5,13 +5,15 @@ from .sofia_ml import train
 
 class RankSVM(base.BaseEstimator):
 
-    def __init__(self, alpha=1., max_iter=100):
+    def __init__(self, alpha=1., model='rank', max_iter=1000):
         self.alpha = alpha
         self.max_iter = max_iter
+        self.model = model
 
     def fit(self, X, y, query_id=None):
         y = np.argsort(y)
-        self.coef_ = train(X, y, self.alpha, query_id, max_iter=self.max_iter, model='rank')
+        self.coef_ = train(X, y, self.alpha, query_id, max_iter=self.max_iter,
+            model=self.model)
         return self
 
     def rank(self, X):
@@ -20,10 +22,8 @@ class RankSVM(base.BaseEstimator):
         order_inv[order] = np.arange(len(order))
         return order_inv
 
-    predict = rank
     # just so that GridSearchCV doesn't complain
-#    def predict(self, X):
-#        return np.dot(X, self.coef_)
+    predict = rank
 
     def score(self, X, y):
         tau, _ = stats.kendalltau(np.dot(X, self.coef_), y)

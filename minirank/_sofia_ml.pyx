@@ -55,6 +55,8 @@ def train(train_data, int n_features, float alpha, int max_iter, bool fit_interc
     elif model == 'combined-ranking':
         StochasticClassificationAndRankLoop(deref(data), SGD_SVM, BASIC_ETA, alpha, c,
             step_probability, max_iter, w)
+    else:
+        raise NotImplementedError
     cdef np.ndarray[ndim=1, dtype=np.float64_t] coef = np.empty(n_features)
     for i in range(n_features):
         coef[i] = w.ValueOf(i)
