@@ -8,10 +8,9 @@ def test_1():
     query_id = np.ones(len(X))
     w = np.random.randn(5)
     y = np.dot(X, w)
-    w_ = train(X, y, 100, query_id, max_iter=1000000)
+    w_ = train(X, y, 1., query_id, max_iter=100)
     tau, _ = stats.kendalltau(y, np.dot(X, w_))
     assert np.abs(1 - tau) > 1e-3
-    print tau
 
 if __name__ == '__main__':
     test_1()

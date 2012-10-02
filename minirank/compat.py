@@ -11,18 +11,23 @@ class RankSVM(base.BaseEstimator):
 
     def fit(self, X, y, query_id=None):
         y = np.argsort(y)
-        self.coef_ = train(X, y, self.alpha, query_id, max_iter=self.max_iter)
+        self.coef_ = train(X, y, self.alpha, query_id, max_iter=self.max_iter, model='rank')
         return self
 
     def rank(self, X):
-        return np.argsort(np.dot(X, self.coef_))
+        order = np.argsort(np.dot(X, self.coef_))
+        order_inv = np.zeros_like(order)
+        order_inv[order] = np.arange(len(order))
+        return order_inv
 
-    # just so that GridSearchCV doesn't complain
     predict = rank
+    # just so that GridSearchCV doesn't complain
+#    def predict(self, X):
+#        return np.dot(X, self.coef_)
 
     def score(self, X, y):
         tau, _ = stats.kendalltau(np.dot(X, self.coef_), y)
-        return tau
+        return np.abs(tau)
 
 
 #### JUST FOR DEBUGGING

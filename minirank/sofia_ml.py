@@ -5,7 +5,7 @@ import _sofia_ml
 
 def train(X, y, alpha, query_id, max_iter=100, model='rank', step_probability=0.5):
     """
-    model : {'rank', 'combined-ranking'}
+    model : {'rank', 'combined-ranking', 'roc'}
 
     """
     if query_id is None:

@@ -27,8 +27,4 @@ def sigmoid_with_noise(n_samples, n_features, outliers=0.,
         y[b] = y[a]
         y[a] = tmp
 
-    order = np.argsort(y)
-    X = X[order]
-    y = y[order]
-
     return X, y, w
