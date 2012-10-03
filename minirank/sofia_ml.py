@@ -41,6 +41,7 @@ def predict(X, coef, query_id=None):
     if isinstance(X, bstring):
         return _sofia_ml.predict(X, s_coef, False)
     else:
+        import ipdb; ipdb.set_trace()
         X = np.asarray(X)
         if query_id is None:
             query_id = np.ones(X.shape[0])

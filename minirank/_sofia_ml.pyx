@@ -70,9 +70,9 @@ def train(train_data, int n_features, float alpha, int max_iter, bool fit_interc
 def predict(test_data, string coef, bool fit_intercept):
     cdef SfDataSet *test_dataset = new SfDataSet(test_data, BUFFER_MB, fit_intercept)
     cdef SfWeightVector *w = new SfWeightVector(coef)
-    cdef vector[float]* predictions
+    cdef vector[float] *predictions = new vector[float]()
     SvmPredictionsOnTestSet(deref(test_dataset), deref(w), predictions)
-    cdef np.ndarray out = np.empty(predictions.size())
+    cdef np.ndarray[ndim=1, dtype=np.float64_t] out = np.empty(predictions.size())
     for i in range(predictions.size()):
-        out[i] = predictions[i]
+        out[i] = predictions.at(i)
     return out
