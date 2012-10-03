@@ -1,7 +1,7 @@
 import numpy as np
 
 def sigmoid_with_noise(n_samples, n_features, outliers=0.,
-                       seed=None, noise_amplitude=.5, slope=5.):
+                       seed=None, noise_amplitude=.2, slope=10.):
     """
     outliers: floating-point in [0, 1]
         fraction of outliers
@@ -14,7 +14,7 @@ def sigmoid_with_noise(n_samples, n_features, outliers=0.,
     y = []
     for i in range(n_samples):
         #X.append(y_lin[i] * w)
-        X.append(y_lin[i] * w)
+        X.append(y_lin[i] * w)# + noise_amplitude * np.random.randn(n_features))
         y.append(1. / (1. + np.exp(- slope * y_lin[i])))
     y = y + noise_amplitude * np.random.rand(n_samples)
 

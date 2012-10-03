@@ -3,6 +3,7 @@
 from cython.operator cimport dereference as deref
 from libcpp cimport bool
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 cimport numpy as np
 import numpy as np
@@ -16,6 +17,7 @@ cdef extern from "src/sofia-ml-methods.h":
 
     cdef cppclass SfWeightVector:
         SfWeightVector(int)
+        SfWeightVector(string)
         string AsString()
         float ValueOf(int)
 
@@ -41,6 +43,8 @@ cdef extern from "src/sofia-ml-methods.h" namespace "sofia_ml":
     void StochasticClassificationAndRankLoop(SfDataSet, LearnerType, EtaType,
         float, float, float, int num_iters, SfWeightVector*)
 
+    void SvmPredictionsOnTestSet(SfDataSet test_data,
+        SfWeightVector, vector[float]*)
 
 def train(train_data, int n_features, float alpha, int max_iter, bool fit_intercept,
           model, float step_probability):
@@ -61,3 +65,14 @@ def train(train_data, int n_features, float alpha, int max_iter, bool fit_interc
     for i in range(n_features):
         coef[i] = w.ValueOf(i)
     return coef
+
+
+def predict(test_data, string coef, bool fit_intercept):
+    cdef SfDataSet *test_dataset = new SfDataSet(test_data, BUFFER_MB, fit_intercept)
+    cdef SfWeightVector *w = new SfWeightVector(coef)
+    cdef vector[float]* predictions
+    SvmPredictionsOnTestSet(deref(test_dataset), deref(w), predictions)
+    cdef np.ndarray out = np.empty(predictions.size())
+    for i in range(predictions.size()):
+        out[i] = predictions[i]
+    return out

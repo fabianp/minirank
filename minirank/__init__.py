@@ -1,1 +1,1 @@
-from sofia_ml import train
+from sofia_ml import train, predict
