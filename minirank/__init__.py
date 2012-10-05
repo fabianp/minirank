@@ -1,1 +1,2 @@
-from sofia_ml import train, predict
+import sofia_ml as svm
+import metrics
