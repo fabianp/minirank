@@ -12,7 +12,7 @@ class RankSVM(base.BaseEstimator):
 
     def fit(self, X, y, query_id=None):
         y = np.argsort(y)
-        self.coef_ = train(X, y, self.alpha, query_id, max_iter=self.max_iter,
+        self.coef_, _ = train((X, y, query_id), self.alpha, max_iter=self.max_iter,
             model=self.model)
         return self
 
