@@ -18,7 +18,7 @@ def sigmoid_with_noise(n_samples, n_features, outliers=0.,
         y.append(1. / (1. + np.exp(- slope * y_lin[i])))
     y = y + noise_amplitude * np.random.rand(n_samples)
 
-    y = np.array(y)
+    y = np.array(y) - np.mean(y)
     X = np.array(X)
 
     for _ in range(int(outliers * n_samples)):
