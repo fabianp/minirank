@@ -28,7 +28,8 @@ def train(data, regularization, model='rank', max_iter=100, step_probability=0.5
                 step_probability)
     return w, None
 
-def predict(data, coef, query_id=None):
+def predict(data, coef, blocks=None):
+    # TODO: isn't query_id in data ???
     s_coef = ''
     for e in coef:
         s_coef += '%.5f ' % e
@@ -37,10 +38,10 @@ def predict(data, coef, query_id=None):
         return _sofia_ml.predict(data, s_coef, False)
     else:
         X = np.asarray(data)
-        if query_id is None:
-            query_id = np.ones(X.shape[0])
+        if blocks is None:
+            blocks = np.ones(X.shape[0])
         with tempfile.NamedTemporaryFile() as f:
             y = np.ones(X.shape[0])
-            datasets.dump_svmlight_file(X, y, f.name, query_id=query_id)
+            datasets.dump_svmlight_file(X, y, f.name, query_id=blocks)
             prediction = _sofia_ml.predict(f.name, s_coef, False)
         return prediction
