@@ -8,7 +8,7 @@ if sys.version_info[0] < 3:
 else:
     bstring = str
 
-def train(data, regularization, model='rank', max_iter=100, step_probability=0.5):
+def sgd_train(data, regularization, n_features=None, model='rank', max_iter=100, step_probability=0.5):
     """
     model : {'rank', 'combined-ranking', 'roc'}
 
@@ -17,7 +17,8 @@ def train(data, regularization, model='rank', max_iter=100, step_probability=0.5
     coef
     """
     if isinstance(data, bstring):
-        n_features = 2 ** 17 # the default in sofia-ml TODO: parse file to see
+        if n_features is None:
+            n_features = 2 ** 17 # the default in sofia-ml TODO: parse file to see
         w = _sofia_ml.train(data, n_features, regularization, max_iter, False, model,
             step_probability)
     else:
@@ -28,7 +29,7 @@ def train(data, regularization, model='rank', max_iter=100, step_probability=0.5
                 step_probability)
     return w, None
 
-def predict(data, coef, blocks=None):
+def sgd_predict(data, coef, blocks=None):
     # TODO: isn't query_id in data ???
     s_coef = ''
     for e in coef:

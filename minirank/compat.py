@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import stats
 from sklearn import base
-from .sofia_ml import train
+from .sofia_ml import sgd_train
 
 class RankSVM(base.BaseEstimator):
 
@@ -12,7 +12,7 @@ class RankSVM(base.BaseEstimator):
 
     def fit(self, X, y, query_id=None):
         y = np.argsort(y)
-        self.coef_, _ = train((X, y, query_id), self.alpha, max_iter=self.max_iter,
+        self.coef_, _ = sgd_train((X, y, query_id), self.alpha, max_iter=self.max_iter,
             model=self.model)
         return self
 
