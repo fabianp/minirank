@@ -10,11 +10,17 @@ else:
 
 def sgd_train(data, regularization, n_features=None, model='rank', max_iter=100, step_probability=0.5):
     """
+    data : string or tuple (X, y, b)
+
+    regularization: tuple
+
     model : {'rank', 'combined-ranking', 'roc'}
 
     Returns
     -------
     coef
+
+    None
     """
     if isinstance(data, bstring):
         if n_features is None:

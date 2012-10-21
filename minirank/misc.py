@@ -1,13 +1,14 @@
 import itertools
 import numpy as np
 
-def transform_pairwise(X, y, query_id=None):
+def transform_pairwise(X, y, blocks=None):
     """Transforms data into pairs with balanced labels for ranking
 
     Transforms a n-class ranking problem into a two-class classification
     problem.
 
-    In this method, all pairs are chosen, except for those that have the
+    In this method only pairs from the same block value are selected,
+    except for those that have the
     same target value. The output is an array of balanced classes, i.e.
     there are the same number of -1 as +1
 
@@ -15,10 +16,9 @@ def transform_pairwise(X, y, query_id=None):
     ----------
     X : array, shape (n_samples, n_features)
         The data
-    y : array, shape (n_samples,) or (n_samples, 2)
-        Target labels. If it's a 2D array, the second column represents
-        the grouping of samples, i.e., samples with different groups will
-        not be considered.
+    y : array, shape (n_samples,)
+        Target labels.
+    b : array, shape (n_samples,), optional
 
     Returns
     -------
@@ -32,14 +32,13 @@ def transform_pairwise(X, y, query_id=None):
     X_new = []
     y_new = []
     diff = []
-    if query_id is None:
-        query_id = np.ones(len(y))
+    if blocks is None:
+        blocks = np.ones(len(y))
     y = np.asarray(y)
     comb = itertools.combinations(range(X.shape[0]), 2)
     k = 0
     for (i, j) in comb:
-        #if np.abs(y[i, 0] - y[j, 0]) <= 1. or y[i, 1] != y[j, 1]:
-        if y[i] == y[j] or query_id[i] != query_id[j]:
+        if y[i] == y[j] or blocks[i] != blocks[j]:
             # skip if same target or different group
             continue
         X_new.append(X[i] - X[j])

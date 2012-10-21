@@ -1,31 +1,31 @@
 import numpy as np
 
 def sigmoid_with_noise(n_samples, n_features, outliers=0.,
-                       seed=None, noise_amplitude=.2):
+                       seed=None, noise_amplitude=.2, slope=1.):
     """
     outliers: floating-point in [0, 1]
         fraction of outliers
     """
     np.random.seed(seed)
     w = np.random.rand(n_features)
-    w /= np.linalg.norm(w)
-    y = np.random.rand(n_samples)
-    y -= np.mean(y)
-    y /= np.abs(y).max()
+    #w /= np.linalg.norm(w)
+    y = 2 * (np.random.rand(n_samples) - 0.5)
     p = y[:, np.newaxis] * w
 
     # centering at [0, 1]
     p -= np.min(p)
     p /= np.max(p)
 
+    #p /= 100
+
     # p lies in [0, 1] but we'd like it to lie in [epsilon, 1 - epsilon]
     # with epsilon a small quantity
-    epsilon = 1e-3 * n_features
+    epsilon = 1e-12 / 2
     m = 1 / (1 + epsilon)
     p *= m
     p += (1 - m) / 2
-    assert np.abs(p.min() - (1 - p.max())) < 1e-3
-    X = np.log(p / (1 - p)) + noise_amplitude * np.random.randn(n_samples, n_features)
+    #assert np.abs(p.min() - (1 - p.max())) < 1e-3
+    X = np.log(p) - np.log(1 - p)  + noise_amplitude * np.random.rand(n_samples, n_features)
 
     # normalize features
 #    for i in range(X.shape[1]):
