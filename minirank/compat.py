@@ -28,3 +28,6 @@ class RankSVM(base.BaseEstimator):
     def score(self, X, y):
         tau, _ = stats.kendalltau(np.dot(X, self.coef_), y)
         return np.abs(tau)
+
+class RankRegression(base):
+    pass
