@@ -20,7 +20,7 @@ def sigmoid_with_noise(n_samples, n_features, outliers=0.,
 
     # p lies in [0, 1] but we'd like it to lie in [epsilon, 1 - epsilon]
     # with epsilon a small quantity
-    epsilon = 1e-8 / 2
+    epsilon = 1e-6 / 2
     m = 1 / (1 + epsilon)
     p *= m
     p += (1 - m) / 2

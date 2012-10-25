@@ -8,11 +8,11 @@ if sys.version_info[0] < 3:
 else:
     bstring = str
 
-def sgd_train(data, regularization, n_features=None, model='rank', max_iter=100, step_probability=0.5):
+def sgd_train(X, y, b, C, n_features=None, model='rank', max_iter=100, step_probability=0.5):
     """
     data : string or tuple (X, y, b)
 
-    regularization: tuple
+    C: tuple
 
     model : {'rank', 'combined-ranking', 'roc'}
 
@@ -22,16 +22,15 @@ def sgd_train(data, regularization, n_features=None, model='rank', max_iter=100,
 
     None
     """
-    if isinstance(data, bstring):
+    if isinstance(X, bstring):
         if n_features is None:
             n_features = 2 ** 17 # the default in sofia-ml TODO: parse file to see
-        w = _sofia_ml.train(data, n_features, regularization, max_iter, False, model,
+        w = _sofia_ml.train(X, n_features, C, max_iter, False, model,
             step_probability)
     else:
-        X, y, query_id = data
         with tempfile.NamedTemporaryFile() as f:
-            datasets.dump_svmlight_file(X, y, f.name, query_id=query_id)
-            w = _sofia_ml.train(f.name, X.shape[1], regularization, max_iter, False, model,
+            datasets.dump_svmlight_file(X, y, f.name, query_id=b)
+            w = _sofia_ml.train(f.name, X.shape[1], C, max_iter, False, model,
                 step_probability)
     return w, None
 
