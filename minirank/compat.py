@@ -11,7 +11,7 @@ class RankSVM(base.BaseEstimator):
         self.model = model
 
     def fit(self, X, y, query_id=None):
-        self.coef_, _ = sgd_train((X, y, query_id), self.alpha, max_iter=self.max_iter,
+        self.coef_, _ = sgd_train(X, y, query_id, self.alpha, max_iter=self.max_iter,
             model=self.model)
         return self
 
