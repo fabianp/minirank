@@ -16,7 +16,7 @@ class RankSVM(base.BaseEstimator):
         return self
 
     def rank(self, X):
-        order = np.argsort(np.dot(X, self.coef_))
+        order = np.argsort(X.dot(self.coef_))
         order_inv = np.zeros_like(order)
         order_inv[order] = np.arange(len(order))
         return order_inv
@@ -25,5 +25,5 @@ class RankSVM(base.BaseEstimator):
     predict = rank
 
     def score(self, X, y):
-        tau, _ = stats.kendalltau(np.dot(X, self.coef_), y)
+        tau, _ = stats.kendalltau(X.dot(self.coef_), y)
         return np.abs(tau)
