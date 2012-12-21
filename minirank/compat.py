@@ -4,6 +4,9 @@ from sklearn import base, linear_model
 from .sofia_ml import sgd_train
 
 class RankSVM(base.BaseEstimator):
+    """
+    TODO: does this fit intercept ?
+    """
 
     def __init__(self, alpha=1., model='rank', max_iter=1000):
         self.alpha = alpha
