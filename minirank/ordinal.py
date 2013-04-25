@@ -1,5 +1,5 @@
 
-from sklearn import datasets, linear_model, isotonic
+from sklearn import datasets, linear_model, metrics, cross_validation
 from scipy import linalg, stats, optimize
 import numpy as np
 import pylab as pl
@@ -41,10 +41,8 @@ def f_eqcons(x0, X, y):
 
 def f_ineqcons(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
-    tmp = 0.
-    for i in range(len(theta0) - 1):
-        tmp += np.fmax(theta0[i] - theta0[i+1], 0) ** 2
-    return - tmp
+    # print theta0
+    return np.diff(theta0).min()
 
 def f_grad(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
@@ -53,12 +51,17 @@ def f_grad(x0, X, y):
     theta = theta0[y]
     a = elem_a(X, theta, w)
     b = elem_b(X, theta, w)
-    tmp = (a * (1 - a) - b * (1 - b)) / (a - b)
+    quot = (a - b)
+    quot[quot == 0] = 1e-32
+    tmp = (a * (1 - a) - b * (1 - b)) / quot
     tmp = (X * tmp[:, None]).sum(0)
+#    if np.any((a-b) == 0):
+#        pass
+#        import ipdb; ipdb.set_trace()
 
     # gradient for w2
-    tmp_a = (a * (1 - a)) / (a - b)
-    tmp_b = (b * (1 - b)) / (a - b)
+    tmp_a = (a * (1 - a)) / quot
+    tmp_b = (b * (1 - b)) / quot
     tmp3 = np.zeros(theta0.size)
     for i in range(y.size):
         e = np.zeros(theta0.size)
@@ -73,11 +76,14 @@ def f_grad(x0, X, y):
 
 def ordinal_logistic(X, y):
     idx = np.argsort(y)
+    idx_inv = np.zeros_like(idx)
+    idx_inv[idx] = np.arange(len(idx))
+
     X = X[idx]
     y = y[idx].astype(np.int)
     unique_y = np.unique(y)
     for i, u in enumerate(unique_y):
-        y[y==u] = i
+        y[y == u] = i
     x0 = np.ones(X.shape[1] + unique_y.size)
     x0[X.shape[1]:] = np.linspace(-1, 1, unique_y.size)
 
@@ -85,20 +91,28 @@ def ordinal_logistic(X, y):
     assert check < 1.
 
     out = optimize.fmin_slsqp(f_obj, x0, args=(X, y), f_eqcons=f_eqcons,
-                              f_ieqcons=f_ineqcons, fprime=f_grad, iter=10000)
+                              f_ieqcons=f_ineqcons, fprime=f_grad, iter=5000)
     w, theta = np.split(out, [X.shape[1]])
-    return w, theta[y]
+    return w, theta[y][idx_inv]
 
-def predict(w, theta, X):
+def predict_logistic(w, theta, X):
     unique_theta = np.unique(theta)
-    out = []
-    for i in range(X.shape[0]):
-        tmp = X[i].dot(w)
-        tmp2 = np.abs(unique_theta - tmp)
-        min_ = np.argsort(tmp2)[0]
-        out.append(min_)
-    return np.array(out)
+    # import ipdb; ipdb.set_trace()
+    mu = [-1]
+    for i in range(unique_theta.size - 1):
+        mu.append((unique_theta[i] + unique_theta[i+1]) / 2.)
 
+    out = np.dot(X, w)
+    mu = np.array(mu)
+    tmp = metrics.pairwise.pairwise_distances(out[:, None], mu[:, None])
+    return np.argmin(tmp, 1)
+
+def predict_ls(w, mu, X):
+    out = np.dot(X, w)
+    unique_mu = np.unique(mu)
+    # get the closest one in theta
+    tmp = metrics.pairwise.pairwise_distances(out[:, None], unique_mu[:, None])
+    return np.argmin(tmp, 1)
 
 
 def isotonic_limited(y, groups, ymin=-1, ymax=1, x0=None, verbose=False):
@@ -134,6 +148,12 @@ def isotonic_limited(y, groups, ymin=-1, ymax=1, x0=None, verbose=False):
 
 
 def ordinal_ls(X, y, alpha=0.):
+    y = np.array(y, dtype=np.float)
+    idx = np.argsort(y)
+    idx_inv = np.zeros_like(idx)
+    idx_inv[idx] = np.arange(len(idx))
+    X = X[idx]
+    y = y[idx]
     groups = y == y[:, None]
     clf = linear_model.Ridge(alpha=alpha, fit_intercept=False)
     y_ = y.copy()
@@ -142,14 +162,30 @@ def ordinal_ls(X, y, alpha=0.):
         z = clf.predict(X)
         y_ = isotonic_limited(z, groups, ymin=-1, ymax=1, x0=y_)
         y_ = np.array(y).ravel()
-    return clf.coef_, y_
+    return clf.coef_, y_[idx_inv]
 
 if __name__ == '__main__':
     X, y = load_data()
-    w, theta = ordinal_logistic(X, y)
-    pred = predict(w, theta, X)
-    print 'Score %s' % (( pred == y).sum() / float(y.size))
+    cv = cross_validation.StratifiedShuffleSplit(y, n_iter=5, test_size=.2)
+    score_logistic = []
+    score_ls = []
+    for train, test in cv:
+        w, theta = ordinal_logistic(X[train], y[train])
+        pred = predict_logistic(w, theta, X[test])
+        s = ((pred == y[test]).sum() / float(test.size))
+        print s
+        #print pred
+        #print y[test]
+        score_logistic.append(s)
 
-    w_ls, theta_ls = ordinal_ls(X, y.astype(np.float), alpha=1e-3)
-    pred_ls = predict(w_ls, theta_ls, X)
-    #print 'Score LS %s' % (( pred_ls == y).sum() / float(y.size))
+
+        w_ls, mu_ls = ordinal_ls(X[train], y[train].astype(np.float), alpha=1e-3)
+        pred_ls = predict_ls(w_ls, mu_ls, X[test])
+        #print pred_ls
+        s = ((pred_ls == y[test]).sum() / float(test.size))
+        score_ls.append(s)
+        print s
+        print
+
+    print 'Score LOGISTIC %s' % np.mean(score_logistic)
+    print 'Score LS       %s' % np.mean(score_ls)
