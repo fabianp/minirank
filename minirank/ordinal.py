@@ -99,8 +99,57 @@ def predict(w, theta, X):
         out.append(min_)
     return np.array(out)
 
+
+
+def isotonic_limited(y, groups, ymin=-1, ymax=1, x0=None, verbose=False):
+    import cvxopt
+    import cvxopt.solvers
+    cvxopt.solvers.options['show_progress'] = verbose
+    A = np.zeros((y.size, y.size))
+    for i in range(groups.shape[0]):
+        idx = np.where(groups[i])[0]
+        if len(idx) < 2:
+            continue
+        tmp1 = [1, -1] + [0] * (len(idx) - 2)
+        tmp2 = [1,  0] + [0] * (len(idx) - 2)
+        A[idx[:, None], idx] = linalg.toeplitz(tmp2, tmp1)
+        A[idx[-1], idx[-1]] = 0.
+    A = A[(A * A).sum(1) > 0]
+    G = linalg.toeplitz([1.] + [0] * (y.size - 1), [1, -1] + [0] * (y.size - 2))
+    G = np.concatenate((np.eye(1, G.shape[1]), G), axis=0)
+    h = np.zeros(y.size + 1)
+    h[0] = -1.
+    h[-1] = 1.
+    A_cvx = cvxopt.matrix(A)
+    P_cvx = cvxopt.matrix(np.eye(y.size))
+    q_cvx = cvxopt.matrix(- y.ravel())
+    b_cvx = cvxopt.matrix(np.zeros_like(A[:, 0]))
+    G_cvx = cvxopt.matrix(G)
+    h_cvx = cvxopt.matrix(h)
+    initvals = {}
+    if x0 is not None:
+        initvals['x'] = cvxopt.matrix(x0)
+    sol = cvxopt.solvers.qp(P_cvx, q_cvx, A=A_cvx, b=b_cvx, G=G_cvx, h=h_cvx, initvals=initvals)
+    return sol['x']
+
+
+def ordinal_ls(X, y, alpha=0.):
+    groups = y == y[:, None]
+    clf = linear_model.Ridge(alpha=alpha, fit_intercept=False)
+    y_ = y.copy()
+    for i in range(100):
+        clf.fit(X, y_)
+        z = clf.predict(X)
+        y_ = isotonic_limited(z, groups, ymin=-1, ymax=1, x0=y_)
+        y_ = np.array(y).ravel()
+    return clf.coef_, y_
+
 if __name__ == '__main__':
     X, y = load_data()
     w, theta = ordinal_logistic(X, y)
     pred = predict(w, theta, X)
     print 'Score %s' % (( pred == y).sum() / float(y.size))
+
+    w_ls, theta_ls = ordinal_ls(X, y.astype(np.float), alpha=1e-3)
+    pred_ls = predict(w_ls, theta_ls, X)
+    #print 'Score LS %s' % (( pred_ls == y).sum() / float(y.size))
