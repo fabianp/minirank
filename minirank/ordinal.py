@@ -2,7 +2,6 @@
 from sklearn import datasets, linear_model, isotonic
 from scipy import linalg, stats, optimize
 import numpy as np
-import cvxopt
 import pylab as pl
 
 BIG = 1e10
@@ -85,9 +84,9 @@ def ordinal_logistic(X, y):
     check= optimize.check_grad(f_obj, f_grad, x0, X, y)
     assert check < 1.
 
-    out = optimize.fmin_slsqp(f_obj, x0, args=(X, y), f_eqcons=f_eqcons, f_ieqcons=f_ineqcons, fprime=f_grad, iter=10000)
+    out = optimize.fmin_slsqp(f_obj, x0, args=(X, y), f_eqcons=f_eqcons,
+                              f_ieqcons=f_ineqcons, fprime=f_grad, iter=10000)
     w, theta = np.split(out, [X.shape[1]])
-    #import ipdb; ipdb.set_trace()
     return w, theta[y]
 
 def predict(w, theta, X):
@@ -103,4 +102,5 @@ def predict(w, theta, X):
 if __name__ == '__main__':
     X, y = load_data()
     w, theta = ordinal_logistic(X, y)
-    print 'Score %s' % ((predict(w, theta, X) == y).sum() / float(y.size))
+    pred = predict(w, theta, X)
+    print 'Score %s' % (( pred == y).sum() / float(y.size))
