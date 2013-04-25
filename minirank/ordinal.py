@@ -166,10 +166,15 @@ def ordinal_ls(X, y, alpha=0.):
 
 if __name__ == '__main__':
     X, y = load_data()
+    idx = np.argsort(y)
+    X = X[idx]
+    y = y[idx]
     cv = cross_validation.StratifiedShuffleSplit(y, n_iter=5, test_size=.2)
     score_logistic = []
     score_ls = []
-    for train, test in cv:
+    import scipy.io
+    for i, (train, test) in enumerate(cv):
+        #scipy.io.savemat('/Users/fabianx/Desktop/data_%s.mat' % i, mdict={'X': X[train], 'y': y[train]})
         w, theta = ordinal_logistic(X[train], y[train])
         pred = predict_logistic(w, theta, X[test])
         s = ((pred == y[test]).sum() / float(test.size))
