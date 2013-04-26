@@ -9,7 +9,7 @@ BIG = 1e10
 
 def elem_a(X, theta, w):
     t = theta - X.dot(w)
-    return 1. / (1 + np.exp(-t))
+    return t
 
 def elem_b(X, theta, w):
     _theta = theta.copy()
@@ -20,13 +20,23 @@ def elem_b(X, theta, w):
         _theta[_theta == t2] = t1
     _theta[theta == unique_theta[0]] = - np.inf
     t = _theta - X.dot(w)
-    return 1. / (1 + np.exp(-t))
+    return t
 
 def f_obj(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
     theta = theta0[y]
-    tmp = elem_a(X, theta, w) - elem_b(X, theta, w)
-    tmp2 = - np.sum(np.log(tmp))
+    a = elem_a(X, theta, w)
+    b = elem_b(X, theta, w)
+    idx = np.isfinite(b)
+    tmp = np.zeros_like(a)
+    tmp[idx] = np.log(np.exp(-b[idx]) - np.exp(-a[idx])) - \
+               np.log((1 + np.exp(-a[idx]))) - np.log((1 + np.exp(-b[idx])))
+    tmp[~idx] = - np.log(1 + np.exp(-a[~idx]))
+    #import ipdb; ipdb.set_trace()
+    return - tmp.sum()
+    #tmp = 1. / (1 + np.exp(-a)) - 1. / (1 + np.exp(-b))
+    #tmp2 = - np.sum(np.log(tmp))
+    #import ipdb; ipdb.set_trace()
     return tmp2
 
 
@@ -51,7 +61,9 @@ def f_grad(x0, X, y):
     # gradient for w
     theta = theta0[y]
     a = elem_a(X, theta, w)
+    a = 1. / (1 + np.exp(-a))
     b = elem_b(X, theta, w)
+    b = 1. / (1 + np.exp(-b))
     quot = (a - b)
     quot[quot == 0] = 1e-32
     tmp = (a * (1 - a) - b * (1 - b)) / quot
@@ -71,7 +83,7 @@ def f_grad(x0, X, y):
             tmp3 -= tmp_b[i] * e1
     return np.concatenate((tmp, - tmp3))
 
-def ordinal_logistic(X, y):
+def ordinal_logistic(X, y, max_iter=1000):
     idx = np.argsort(y)
     idx_inv = np.zeros_like(idx)
     idx_inv[idx] = np.arange(idx.size)
@@ -91,7 +103,7 @@ def ordinal_logistic(X, y):
 
     out = optimize.fmin_slsqp(f_obj, x0, args=(X, y),
                               f_ieqcons=f_ineqcons, fprime=f_grad, bounds=bounds,
-                              fprime_ieqcons=f_ineqcons_grad, iter=5000)
+                              fprime_ieqcons=f_ineqcons_grad, iter=max_iter)
     w, theta = np.split(out, [X.shape[1]])
     return w, theta[y][idx_inv]
 
@@ -101,6 +113,7 @@ def predict_logistic(w, theta, X):
     mu = [-1]
     for i in range(unique_theta.size - 1):
         mu.append((unique_theta[i] + unique_theta[i+1]) / 2.)
+        # todo: use roll
 
     out = np.dot(X, w)
     mu = np.array(mu)
@@ -120,28 +133,29 @@ if __name__ == '__main__':
     idx = np.argsort(y)
     X = X[idx]
     y = y[idx]
-    cv = cross_validation.StratifiedShuffleSplit(y, n_iter=50, test_size=.25)
+    cv = cross_validation.StratifiedShuffleSplit(y, n_iter=50, test_size=.25, random_state=0)
     score_logistic = []
     score_ordinal_logistic = []
     for i, (train, test) in enumerate(cv):
+        assert np.all(np.unique(y[train]) == np.unique(y))
         train = np.sort(train)
         test = np.sort(test)
         w, theta = ordinal_logistic(X[train], y[train])
         pred = predict_logistic(w, theta, X[test])
         s = ((pred == y[test]).sum() / float(test.size))
-        print('Score (ORDINAL) fold %s: %s' % (i+1, s))
+        print('Score (ORDINAL)  fold %s: %s' % (i+1, s))
         score_ordinal_logistic.append(s)
 
         from sklearn import linear_model
-        clf = linear_model.LogisticRegression()
+        clf = linear_model.LogisticRegression(C=1e10)
         clf.fit(X[train], y[train])
         pred = clf.predict(X[test])
         s = ((pred == y[test]).sum() / float(test.size))
         print('Score (LOGISTIC) fold %s: %s' % (i+1, s))
         score_logistic.append(s)
 
-
     print()
     print('MEAN SCORE (ORDINAL LOGISTIC):    %s' % np.mean(score_ordinal_logistic))
     print('MEAN SCORE (LOGISTIC REGRESSION): %s' % np.mean(score_logistic))
+    print('Chance level is at %s' % (1. / np.unique(y).size))
 
