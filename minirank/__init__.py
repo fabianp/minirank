@@ -1,4 +1,4 @@
-from sofia_ml import sgd_train, sgd_predict
-import metrics, compat
+
+import metrics
 from misc import transform_pairwise
 import datasets
