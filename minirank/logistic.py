@@ -25,19 +25,20 @@ def elem_b(X, theta, w):
 def f_obj(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
     theta = theta0[y]
+    _theta = theta.copy()
+    unique_theta = np.unique(theta)
+    for i in range(len(unique_theta) - 1):
+        t1 = unique_theta[i]
+        t2 = unique_theta[i+1]
+        _theta[_theta == t2] = t1
+    _theta[theta == unique_theta[0]] = - np.inf
+
     a = elem_a(X, theta, w)
     b = elem_b(X, theta, w)
-    idx = np.isfinite(b)
-    tmp = np.zeros_like(a)
-    tmp[idx] = np.log(np.exp(-b[idx]) - np.exp(-a[idx])) - \
-               np.log((1 + np.exp(-a[idx]))) - np.log((1 + np.exp(-b[idx])))
-    tmp[~idx] = - np.log(1 + np.exp(-a[~idx]))
+    tmp1 = np.dot(X, w) - np.log(np.exp(theta) - np.exp(_theta)) + \
+           np.log((1 + np.exp(a))) + np.log((1 + np.exp(b)))
     #import ipdb; ipdb.set_trace()
-    return - tmp.sum()
-    #tmp = 1. / (1 + np.exp(-a)) - 1. / (1 + np.exp(-b))
-    #tmp2 = - np.sum(np.log(tmp))
-    #import ipdb; ipdb.set_trace()
-    return tmp2
+    return tmp1.sum()
 
 
 def f_ineqcons(x0, X, y):
@@ -66,8 +67,6 @@ def f_grad(x0, X, y):
     b = 1. / (1 + np.exp(-b))
     quot = (a - b)
     quot[quot == 0] = 1e-32
-    tmp = (a * (1 - a) - b * (1 - b)) / quot
-    tmp = (X * tmp[:, None]).sum(0)
 
     # gradient for w2
     tmp_a = (a * (1 - a)) / quot
@@ -81,7 +80,11 @@ def f_grad(x0, X, y):
         if y[i] > 0:
             e1[y[i] - 1] = 1.
             tmp3 -= tmp_b[i] * e1
-    return np.concatenate((tmp, - tmp3))
+
+    tmp1 = ((1 - a - b) * X.T).sum(1)
+    out = np.concatenate((tmp1, - tmp3))
+    #import ipdb; ipdb.set_trace()
+    return out
 
 def ordinal_logistic(X, y, max_iter=1000):
     idx = np.argsort(y)
