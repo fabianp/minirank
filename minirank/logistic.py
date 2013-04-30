@@ -35,7 +35,7 @@ def f_obj(x0, X, y):
 
     a = elem_a(X, theta, w)
     b = elem_b(X, theta, w)
-    tmp1 = np.dot(X, w) - np.log(np.exp(theta) - np.exp(_theta)) + \
+    tmp1 = X.dot(w) - np.log(np.exp(theta) - np.exp(_theta)) + \
            np.log((1 + np.exp(a))) + np.log((1 + np.exp(b)))
     #import ipdb; ipdb.set_trace()
     return tmp1.sum()
@@ -43,7 +43,9 @@ def f_obj(x0, X, y):
 
 def f_ineqcons(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
-    return np.diff(theta0)
+    out = np.diff(theta0)
+    # print(theta0)
+    return out
 
 def f_ineqcons_grad(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
@@ -54,7 +56,7 @@ def f_ineqcons_grad(x0, X, y):
     L = L[:-1]
     T = np.zeros((L.shape[0], x0.size))
     T[:, x0.size - L.shape[1]:] = L[:, :]
-    return T
+    return -T
 
 def f_grad(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
@@ -86,7 +88,7 @@ def f_grad(x0, X, y):
     #import ipdb; ipdb.set_trace()
     return out
 
-def ordinal_logistic(X, y, max_iter=1000):
+def ordinal_logistic(X, y, max_iter=1000, verbose=False):
     idx = np.argsort(y)
     idx_inv = np.zeros_like(idx)
     idx_inv[idx] = np.arange(idx.size)
@@ -94,19 +96,20 @@ def ordinal_logistic(X, y, max_iter=1000):
     X = X[idx]
     y = y[idx].astype(np.int)
     unique_y = np.unique(y)
+    # make them continuous and start at zero
     for i, u in enumerate(unique_y):
         y[y == u] = i
-    x0 = np.ones(X.shape[1] + unique_y.size)
+    x0 = np.ones(X.shape[1] + unique_y.size) / X.shape[0]
     x0[X.shape[1]:] = np.linspace(-1, 1, unique_y.size)
 
-    check = optimize.check_grad(f_obj, f_grad, x0, X, y)
-    assert check < 1.
+    #check = optimize.check_grad(f_obj, f_grad, x0, X, y)
+    #assert check < 1.
 
     bounds = [(-BIG, BIG)] * X.shape[1] + [(-1, 1)] * unique_y.size
 
     out = optimize.fmin_slsqp(f_obj, x0, args=(X, y),
                               f_ieqcons=f_ineqcons, fprime=f_grad, bounds=bounds,
-                              fprime_ieqcons=f_ineqcons_grad, iter=max_iter)
+                              fprime_ieqcons=f_ineqcons_grad, iter=max_iter, iprint=verbose)
     w, theta = np.split(out, [X.shape[1]])
     return w, theta[y][idx_inv]
 
@@ -118,7 +121,7 @@ def predict_logistic(w, theta, X):
         mu.append((unique_theta[i] + unique_theta[i+1]) / 2.)
         # todo: use roll
 
-    out = np.dot(X, w)
+    out = X.dot(w)
     mu = np.array(mu)
     tmp = metrics.pairwise.pairwise_distances(out[:, None], mu[:, None])
     return np.argmin(tmp, 1)
