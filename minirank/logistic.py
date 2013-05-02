@@ -1,50 +1,14 @@
 from __future__ import print_function
 
-from sklearn import datasets, linear_model, metrics, cross_validation
-from scipy import linalg, stats, optimize
+from sklearn import utils, metrics
+from scipy import linalg, optimize, sparse
 import numpy as np
-import pylab as pl
 
 BIG = 1e10
-
-def elem_a(X, theta, w):
-    t = theta - X.dot(w)
-    return t
-
-def elem_b(X, theta, w):
-    _theta = theta.copy()
-    unique_theta = np.unique(theta)
-    for i in range(len(unique_theta) - 1):
-        t1 = unique_theta[i]
-        t2 = unique_theta[i+1]
-        _theta[_theta == t2] = t1
-    _theta[theta == unique_theta[0]] = - np.inf
-    t = _theta - X.dot(w)
-    return t
-
-def f_obj(x0, X, y):
-    w, theta0 = np.split(x0, [X.shape[1]])
-    theta = theta0[y]
-    _theta = theta.copy()
-    unique_theta = np.unique(theta)
-    for i in range(len(unique_theta) - 1):
-        t1 = unique_theta[i]
-        t2 = unique_theta[i+1]
-        _theta[_theta == t2] = t1
-    _theta[theta == unique_theta[0]] = - np.inf
-
-    a = elem_a(X, theta, w)
-    b = elem_b(X, theta, w)
-    tmp1 = X.dot(w) - np.log(np.exp(theta) - np.exp(_theta)) + \
-           np.log((1 + np.exp(a))) + np.log((1 + np.exp(b)))
-    #import ipdb; ipdb.set_trace()
-    return tmp1.sum()
-
 
 def f_ineqcons(x0, X, y):
     w, theta0 = np.split(x0, [X.shape[1]])
     out = np.diff(theta0)
-    # print(theta0)
     return out
 
 def f_ineqcons_grad(x0, X, y):
@@ -58,52 +22,94 @@ def f_ineqcons_grad(x0, X, y):
     T[:, x0.size - L.shape[1]:] = L[:, :]
     return -T
 
-def f_grad(x0, X, y):
-    w, theta0 = np.split(x0, [X.shape[1]])
-
-    # gradient for w
-    theta = theta0[y]
-    a = elem_a(X, theta, w)
-    a = 1. / (1 + np.exp(-a))
-    b = elem_b(X, theta, w)
-    b = 1. / (1 + np.exp(-b))
-    quot = (a - b)
-    quot[quot == 0] = 1e-32
-
-    # gradient for w2
-    tmp_a = (a * (1 - a)) / quot
-    tmp_b = (b * (1 - b)) / quot
-    tmp3 = np.zeros(theta0.size)
-    for i in range(y.size):
-        e = np.zeros(theta0.size)
-        e1 = e.copy()
-        e[y[i]] = 1.
-        tmp3 += tmp_a[i] * e
-        if y[i] > 0:
-            e1[y[i] - 1] = 1.
-            tmp3 -= tmp_b[i] * e1
-
-    tmp1 = ((1 - a - b) * X.T).sum(1)
-    out = np.concatenate((tmp1, - tmp3))
-    #import ipdb; ipdb.set_trace()
-    return out
 
 def ordinal_logistic(X, y, max_iter=1000, verbose=False):
+    """
+    Ordinal logistic regression or proportional odds model.
+    Uses scipy's optimize.fmin_slsqp solver.
+
+    Parameters
+    ----------
+
+    X : {array, sparse matrix}
+
+    y : array-like
+
+    max_iter : int
+        maximum number of iterations
+    """
+
+    X = utils.safe_asarray(X)
+    y = np.asarray(y)
+
+    # .. order input ..
     idx = np.argsort(y)
     idx_inv = np.zeros_like(idx)
     idx_inv[idx] = np.arange(idx.size)
-
     X = X[idx]
     y = y[idx].astype(np.int)
-    unique_y = np.unique(y)
     # make them continuous and start at zero
+    unique_y = np.unique(y)
     for i, u in enumerate(unique_y):
         y[y == u] = i
+    unique_y = np.unique(y)
+
+    # .. utility arrays used in f_grad ..
+    E0 = (y[:, np.newaxis] == np.unique(y)).astype(np.int)
+    E1 = np.roll(E0, -1, axis=-1)
+    E1[:, -1] = 0.
+    E0, E1 = map(sparse.csr_matrix, (E0.T, E1.T))
+
+    def f_obj(x0, X, y):
+        """
+        Objective function
+        """
+        w, theta0 = np.split(x0, [X.shape[1]])
+        theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
+        theta1[0] = - np.inf
+
+        Xw = X.dot(w)
+        a = Xw - theta0[y]
+        b = Xw - theta1[y]
+        tmp = np.log(1. / (1 + np.exp(a)) - 1. / (1 + np.exp(b)))
+        return - tmp.sum()
+
+    def f_grad(x0, X, y):
+        """
+        Gradient of the objective function
+        """
+        w, theta0 = np.split(x0, [X.shape[1]])
+        theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
+        theta1[0] = - np.inf
+        Xw = X.dot(w)
+        a = Xw - theta0[y]
+        b = Xw - theta1[y]
+
+        # gradient for w
+        a = 1. / (1 + np.exp(a))
+        b = 1. / (1 + np.exp(b))
+        grad_w = np.sum((1 - a - b) * X.T, axis=1)
+
+        tmp0 = 1 - 1. / (1 + np.exp(a)) - \
+            1. / (1 - np.exp(theta1[y] - theta0[y]))
+        tmp0 = E0.dot(tmp0)
+        tmp1 = 1 - 1. / (1 + np.exp(b)) - \
+            1. / (1 - np.exp(- (theta1[y] - theta0[y])))
+        tmp1 = E1.dot(tmp1)
+        grad_theta = tmp0 + tmp1
+
+        return np.concatenate((grad_w, grad_theta))
+
+
     x0 = np.ones(X.shape[1] + unique_y.size) / X.shape[0]
     x0[X.shape[1]:] = np.linspace(-1, 1, unique_y.size)
 
-    #check = optimize.check_grad(f_obj, f_grad, x0, X, y)
-    #assert check < 1.
+    if False:
+        # check gradient is correctly computed
+        check = optimize.check_grad(f_obj, f_grad, x0, X, y)
+        print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y))
+        print(f_grad(x0, X, y))
+        assert check < 1.
 
     bounds = [(-BIG, BIG)] * X.shape[1] + [(-1, 1)] * unique_y.size
 
@@ -112,6 +118,7 @@ def ordinal_logistic(X, y, max_iter=1000, verbose=False):
                               fprime_ieqcons=f_ineqcons_grad, iter=max_iter, iprint=verbose)
     w, theta = np.split(out, [X.shape[1]])
     return w, theta[y][idx_inv]
+
 
 def predict_logistic(w, theta, X):
     unique_theta = np.unique(theta)
@@ -135,6 +142,7 @@ def load_data():
     return X, y
 
 if __name__ == '__main__':
+    from sklearn import cross_validation
     X, y = load_data()
     idx = np.argsort(y)
     X = X[idx]
