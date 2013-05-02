@@ -11,7 +11,7 @@ import numpy as np
 BIG = 1e10
 
 
-def ordinal_logistic(X, y, max_iter=1000, verbose=False):
+def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
     """
     Ordinal logistic regression or proportional odds model.
     Uses scipy's optimize.fmin_slsqp solver.
@@ -129,7 +129,7 @@ def ordinal_logistic(X, y, max_iter=1000, verbose=False):
     return w, theta[y][idx_inv]
 
 
-def predict_logistic(w, theta, X, y):
+def ordinal_logistic_predict(w, theta, X, y):
     """
     Parameters
     ----------
@@ -148,6 +148,12 @@ def predict_logistic(w, theta, X, y):
     return unique_y[np.argmin(tmp, 1)]
 
 if __name__ == '__main__':
+    DOC = """
+================================================================================
+    Compare the prediction accuracy of different models on the boston dataset
+================================================================================
+    """
+    print(DOC)
     from sklearn import cross_validation, datasets
     boston = datasets.load_boston()
     X, y = boston.data, np.round(boston.target)
@@ -168,8 +174,8 @@ if __name__ == '__main__':
         assert np.all(np.unique(y[train]) == np.unique(y))
         train = np.sort(train)
         test = np.sort(test)
-        w, theta = ordinal_logistic(X[train], y[train])
-        pred = predict_logistic(w, theta, X[test], y)
+        w, theta = ordinal_logistic_fit(X[train], y[train])
+        pred = ordinal_logistic_predict(w, theta, X[test], y)
         s = metrics.mean_absolute_error(y[test], pred)
         print('ERROR (ORDINAL)  fold %s: %s' % (i+1, s))
         score_ordinal_logistic.append(s)
@@ -194,4 +200,5 @@ if __name__ == '__main__':
     print()
     print('MEAN ABSOLUTE ERROR (ORDINAL LOGISTIC):    %s' % np.mean(score_ordinal_logistic))
     print('MEAN ABSOLUTE ERROR (LOGISTIC REGRESSION): %s' % np.mean(score_logistic))
+    print('MEAN ABSOLUTE ERROR (RIDGE REGRESSION):    %s' % np.mean(score_ridge))
     # print('Chance level is at %s' % (1. / np.unique(y).size))

@@ -3,16 +3,16 @@ Some ranking algorithms in Python.
 Dependencies
 ------------
 
-  - cython >= 0.17 (previous versions will not work)
   - numpy
+  - scipy
 
 Methods
 -------
 
-minirank.train_sgd
+minirank.ordinal_logistic_fit
 
-    Trains a model using stochastic gradient descent. See docstring for
-    more details.
+    train an ordinal logistic model
 
-minirank.compat.RankSVM implements an estimator following the conventions
-used in scikit-learn.
+minirank.ordinal_logistic_predict
+
+    predict a model trained by minirank.ordinal_logistic_fit
