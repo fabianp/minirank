@@ -1,4 +1,4 @@
-Some ranking algorithms in Python.
+Some ranking and ordinal regression algorithms in Python.
 
 .. image:: http://fseoane.net/static/minirank-logo.png
 
