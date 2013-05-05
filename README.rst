@@ -1,5 +1,7 @@
 Some ranking algorithms in Python.
 
+.. image:: http://fseoane.net/static/minirank-logo.png
+
 Dependencies
 ------------
 
