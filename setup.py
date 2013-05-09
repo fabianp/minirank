@@ -4,11 +4,11 @@ import glob
 import numpy as np
 
 
-setup(name='ranking',
+setup(name='minirank',
     version='0.1',
     description='Ranking algorithms',
     author='Fabian Pedregosa',
-    author_email='fabian@fseoane.net',
+    author_email='f@fabianp.net',
     url='',
     packages=['minirank'],
     cmdclass = {'build_ext': build_ext},
