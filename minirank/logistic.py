@@ -10,6 +10,34 @@ import numpy as np
 
 BIG = 1e10
 
+def safe_log_logistic(t):
+    """
+    compute log(1 / (1 + np.exp(-t)))
+    """
+    #np.seterr(all='raise')
+    idx = t > 0
+    out = np.zeros(t.size, dtype=np.float64)
+    t0 = t[idx]
+    out[idx] = - np.log(1 + np.exp(-t0))
+    out[~idx] = t0 - np.log(1 + np.exp(t0))
+    #import ipdb; ipdb.set_trace()
+    #print(out)
+    assert np.all(out <= 0)
+    return out
+
+
+def safe_logistic(t):
+    """
+    compute 1 / (1 + np.exp(-t))
+    """
+    idx = t > 0
+    out = np.zeros(t.size, dtype=np.float64)
+    t0 = t[idx]
+    out[idx] = 1. / (1 + np.exp(-t0))
+    t0 = t[~idx]
+    out[~idx] = np.exp(t0) / (1 + np.exp(t0))
+    return out
+
 
 def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
     """
@@ -56,6 +84,8 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
     E1[:, -1] = 0.
     E0, E1 = map(sparse.csr_matrix, (E0.T, E1.T))
     L = np.tril(np.ones((unique_y.size, unique_y.size)))
+    alpha = 1.
+
 
     def f_obj(x0, X, y):
         """
@@ -64,30 +94,33 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         w, z = np.split(x0, [X.shape[1]])
         theta0 = L.dot(z)
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
-        theta1[0] = - np.inf
+        theta1[0] = np.nan
 
         Xw = X.dot(w)
         a = theta0[y] - Xw
         b = theta1[y] - Xw
         out = np.zeros(a.size, dtype=np.float)
-        idx = a < 0
+        idx = (y > 0)
         a0, b0 = a[idx], b[idx]
-        out[idx] = a0 + np.log(1 - np.exp(b0 - a0)) - \
-                    np.log(1 + np.exp(a0)) - np.log(1 + np.exp(b0))
-        a0, b0 = a[~idx], b[~idx]
-        out[~idx] = a0 + np.log(1 - np.exp(b0 - a0)) + \
-            1 - a0 - np.log(1 + np.exp(-a0)) + 1 - b0 - np.log(1 + np.exp(-b0))
+        out[idx] = - safe_log_logistic(a0)
+        #out[idx] = - b0 - np.log(1 - np.exp(- z[y][idx])) - \
+            #safe_log_logistic(a0)# - safe_log_logistic(b0)
+#        print(out[idx])
+#        print(np.log(safe_logistic(a0) - safe_logistic(b0)))
+        #out[idx] = np.log(safe_logistic(a0) - safe_logistic(b0))
+#        import ipdb; ipdb.set_trace()
 
         a0 = a[y == 0]
-        if a0[0] > 0:
-            out[y == 0] = 1 - np.log(1 + np.exp(- a0))
-        else:
-            out[y == 0] = a0 - np.log(1 + np.exp(a0))
-#        print((~ np.isfinite(out)).sum())
+        out[y == 0] = - safe_log_logistic(a0)
+        #import ipdb; ipdb.set_trace()
         if (~np.isfinite(out)).sum() > 0:
-            pass
-            #import ipdb; ipdb.set_trace()
-        return - out.sum()
+            import ipdb; ipdb.set_trace()
+        if out.sum() < 0:
+            import ipdb; ipdb.set_trace()
+
+        print(out.sum())
+        return out.sum()
+
 
     def f_grad(x0, X, y):
         """
@@ -98,13 +131,14 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
         theta1[0] = - np.inf
         Xw = X.dot(w)
-        a = Xw - theta0[y]
-        b = Xw - theta1[y]
+        a = theta0[y] - Xw
+        b = theta1[y] - Xw
 
         # gradient for w
-        a = 1. / (1 + np.exp(a))
-        b = 1. / (1 + np.exp(b))
-        grad_w = np.sum((1 - a - b) * X.T, axis=1)
+        a0 = safe_logistic(a)
+        b0 = safe_logistic(b)
+        #import ipdb; ipdb.set_trace()
+        grad_w = - X.sum(0) + X.T.dot(1 - a0) + X.T.dot(1 - b0)
 
         tmp0 = 1 - a - \
             1. / (1 - np.exp(theta0[y] - theta1[y]))
@@ -116,30 +150,39 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
 #        import ipdb; ipdb.set_trace()
 
         out = np.concatenate((grad_w, L.T.dot(grad_theta)))
+        approx_grad = optimize.approx_fprime(x0, f_obj, 1e-10, X, y)
+        print(approx_grad)
+        print(out)
+        import ipdb; ipdb.set_trace()
         return out
 
 
-    x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
+    #x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
     x0 = np.zeros(X.shape[1] + unique_y.size) / X.shape[1]
-    x0[X.shape[1]] = -1.
-    x0[X.shape[1] + 1:] = 1. / unique_y.size
+    x0[X.shape[1]] = -.5
+    x0[X.shape[1] + 1:] = 2. / unique_y.size
 
-    if True:
+    def callback(x0):
         # check that gradient is correctly computed
         check = optimize.check_grad(f_obj, f_grad, x0, X, y)
-        approx_grad = optimize.approx_fprime(x0, f_obj, 1e-3, X, y)
-        #print(approx_grad[X.shape[1]:])
-        #print(f_grad(x0, X, y)[X.shape[1]:])
+        approx_grad = optimize.approx_fprime(x0, f_obj, 1e-10, X, y)
+        #print('Approx', approx_grad)
+        #print('Computed', f_grad(x0, X, y))
+        print(f_obj(x0, X, y))
         #print(check, f_obj(x0, X, y))
-        assert np.abs(check / f_obj(x0, X, y)) < 1e-3
+        #assert np.abs(check) < 1e-3
 
     bounds = [(None, None)] * (X.shape[1] + 1) + [(1. / unique_y.size, None)] * (unique_y.size - 1)
+    options = {'maxiter' : max_iter, 'disp': 0, 'gtol': 1e-16, 'tol': 1e-32}
+    out = optimize.minimize(f_obj, x0, args=(X, y), method='L-BFGS-B', jac=f_grad,
+                            bounds=bounds, options=options, callback=callback)
+#    out = optimize.minimize(f_obj, out.x, args=(X, y), method='TNC', jac=f_grad,
+#                            bounds=bounds, options=options)
 
-    out = optimize.fmin_tnc(f_obj, x0, args=(X, y),
-            fprime=f_grad, bounds=bounds, maxfun=max_iter, disp=0)
-    w, z = np.split(out[0], [X.shape[1]])
+    assert out.success
+    w, z = np.split(out.x, [X.shape[1]])
     theta = L.dot(z)
-    #import ipdb; ipdb.set_trace()
+    import ipdb; ipdb.set_trace()
     return w, theta[y][idx_inv]
 
 
