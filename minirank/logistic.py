@@ -55,26 +55,46 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
     E1 = np.roll(E0, -1, axis=-1)
     E1[:, -1] = 0.
     E0, E1 = map(sparse.csr_matrix, (E0.T, E1.T))
+    L = np.tril(np.ones((unique_y.size, unique_y.size)))
 
     def f_obj(x0, X, y):
         """
         Objective function
         """
-        w, theta0 = np.split(x0, [X.shape[1]])
+        w, z = np.split(x0, [X.shape[1]])
+        theta0 = L.dot(z)
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
         theta1[0] = - np.inf
 
         Xw = X.dot(w)
-        a = Xw - theta0[y]
-        b = Xw - theta1[y]
-        tmp = np.log(1. / (1 + np.exp(a)) - 1. / (1 + np.exp(b)))
-        return - tmp.sum()
+        a = theta0[y] - Xw
+        b = theta1[y] - Xw
+        out = np.zeros(a.size, dtype=np.float)
+        idx = a < 0
+        a0, b0 = a[idx], b[idx]
+        out[idx] = a0 + np.log(1 - np.exp(b0 - a0)) - \
+                    np.log(1 + np.exp(a0)) - np.log(1 + np.exp(b0))
+        a0, b0 = a[~idx], b[~idx]
+        out[~idx] = a0 + np.log(1 - np.exp(b0 - a0)) + \
+            1 - a0 - np.log(1 + np.exp(-a0)) + 1 - b0 - np.log(1 + np.exp(-b0))
+
+        a0 = a[y == 0]
+        if a0[0] > 0:
+            out[y == 0] = 1 - np.log(1 + np.exp(- a0))
+        else:
+            out[y == 0] = a0 - np.log(1 + np.exp(a0))
+#        print((~ np.isfinite(out)).sum())
+        if (~np.isfinite(out)).sum() > 0:
+            pass
+            #import ipdb; ipdb.set_trace()
+        return - out.sum()
 
     def f_grad(x0, X, y):
         """
         Gradient of the objective function
         """
-        w, theta0 = np.split(x0, [X.shape[1]])
+        w, z = np.split(x0, [X.shape[1]])
+        theta0 = L.dot(z)
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
         theta1[0] = - np.inf
         Xw = X.dot(w)
@@ -86,46 +106,40 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         b = 1. / (1 + np.exp(b))
         grad_w = np.sum((1 - a - b) * X.T, axis=1)
 
-        tmp0 = 1 - 1. / (1 + np.exp(a)) - \
-            1. / (1 - np.exp(theta1[y] - theta0[y]))
+        tmp0 = 1 - a - \
+            1. / (1 - np.exp(theta0[y] - theta1[y]))
         tmp0 = E0.dot(tmp0)
-        tmp1 = 1 - 1. / (1 + np.exp(b)) - \
-            1. / (1 - np.exp(- (theta1[y] - theta0[y])))
+        tmp1 = 1 - b - \
+            1. / (1 - np.exp(- (theta0[y] - theta1[y])))
         tmp1 = E1.dot(tmp1)
-        grad_theta = tmp0 + tmp1
+        grad_theta = - (tmp0 + tmp1)
+#        import ipdb; ipdb.set_trace()
 
-        return np.concatenate((grad_w, grad_theta))
-
-    def f_ineqcons(x0, X, y):
-        w, theta0 = np.split(x0, [X.shape[1]])
-        out = np.diff(theta0)
+        out = np.concatenate((grad_w, L.T.dot(grad_theta)))
         return out
 
-    def f_ineqcons_grad(x0, X, y):
-        w, theta0 = np.split(x0, [X.shape[1]])
-        e1 = np.eye(theta0.size, 1).ravel()
-        e2 = e1.copy()
-        e2[1] = -1.
-        L = - linalg.toeplitz(e1, e2)
-        L = L[:-1]
-        T = np.zeros((L.shape[0], x0.size))
-        T[:, x0.size - L.shape[1]:] = L[:, :]
-        return -T
 
-    x0 = np.ones(X.shape[1] + unique_y.size) / X.shape[0]
-    x0[X.shape[1]:] = np.linspace(-.9, .9, unique_y.size)
+    x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
+    x0 = np.zeros(X.shape[1] + unique_y.size) / X.shape[1]
+    x0[X.shape[1]] = -1.
+    x0[X.shape[1] + 1:] = 1. / unique_y.size
 
-    if False:
+    if True:
         # check that gradient is correctly computed
         check = optimize.check_grad(f_obj, f_grad, x0, X, y)
-        assert check / f_obj(x0, X, y) < 1.
+        approx_grad = optimize.approx_fprime(x0, f_obj, 1e-3, X, y)
+        #print(approx_grad[X.shape[1]:])
+        #print(f_grad(x0, X, y)[X.shape[1]:])
+        #print(check, f_obj(x0, X, y))
+        assert np.abs(check / f_obj(x0, X, y)) < 1e-3
 
-    bounds = [(-BIG, BIG)] * X.shape[1] + [(-1, 1)] * unique_y.size
+    bounds = [(None, None)] * (X.shape[1] + 1) + [(1. / unique_y.size, None)] * (unique_y.size - 1)
 
-    out = optimize.fmin_slsqp(f_obj, x0, args=(X, y),
-                              f_ieqcons=f_ineqcons, fprime=f_grad, bounds=bounds,
-                              fprime_ieqcons=f_ineqcons_grad, iter=max_iter, iprint=verbose)
-    w, theta = np.split(out, [X.shape[1]])
+    out = optimize.fmin_tnc(f_obj, x0, args=(X, y),
+            fprime=f_grad, bounds=bounds, maxfun=max_iter, disp=0)
+    w, z = np.split(out[0], [X.shape[1]])
+    theta = L.dot(z)
+    #import ipdb; ipdb.set_trace()
     return w, theta[y][idx_inv]
 
 def ordinal_logistic_predict(w, theta, X, y):
@@ -275,7 +289,7 @@ if __name__ == '__main__':
     from sklearn import cross_validation, datasets
     boston = datasets.load_boston()
     X, y = boston.data, np.round(boston.target)
-    X -= X.mean()
+    #X -= X.mean()
     y -= y.min()
 
     idx = np.argsort(y)
@@ -286,6 +300,7 @@ if __name__ == '__main__':
     score_ordinal_logistic = []
     score_ridge = []
     for i, (train, test) in enumerate(cv):
+        #test = train
         if not np.all(np.unique(y[train]) == np.unique(y)):
             # we need the train set to have all different classes
             continue
@@ -311,7 +326,7 @@ if __name__ == '__main__':
         clf.fit(X[train], y[train])
         pred = np.round(clf.predict(X[test]))
         s = metrics.mean_absolute_error(y[test], pred)
-        print('ERROR (LOGISTIC) fold %s: %s' % (i+1, s))
+        print('ERROR (RIDGE)    fold %s: %s' % (i+1, s))
         score_ridge.append(s)
 
 
