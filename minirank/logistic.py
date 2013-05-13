@@ -10,15 +10,17 @@ import numpy as np
 
 BIG = 1e10
 
-def safe_log_logistic(t):
+
+def log_logistic(t):
     """
-    compute log(1 / (1 + np.exp(-t)))
+    compute log(1 / (1 + np.exp(-t))) in a stable way
     """
     #np.seterr(all='raise')
     idx = t > 0
     out = np.zeros(t.size, dtype=np.float64)
     t0 = t[idx]
     out[idx] = - np.log(1 + np.exp(-t0))
+    t0 = t[~idx]
     out[~idx] = t0 - np.log(1 + np.exp(t0))
     #import ipdb; ipdb.set_trace()
     #print(out)
@@ -26,7 +28,7 @@ def safe_log_logistic(t):
     return out
 
 
-def safe_logistic(t):
+def logistic(t):
     """
     compute 1 / (1 + np.exp(-t))
     """
@@ -39,7 +41,7 @@ def safe_logistic(t):
     return out
 
 
-def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
+def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
     """
     Ordinal logistic regression or proportional odds model.
     Uses scipy's optimize.fmin_slsqp solver.
@@ -79,11 +81,7 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
     unique_y = np.unique(y)
 
     # .. utility arrays used in f_grad ..
-    E0 = (y[:, np.newaxis] == np.unique(y)).astype(np.int)
-    E1 = np.roll(E0, -1, axis=-1)
-    E1[:, -1] = 0.
-    E0, E1 = map(sparse.csr_matrix, (E0.T, E1.T))
-    L = np.tril(np.ones((unique_y.size, unique_y.size)))
+    L_inv = np.tril(np.ones((unique_y.size, unique_y.size)))
     alpha = 1.
 
 
@@ -92,7 +90,7 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         Objective function
         """
         w, z = np.split(x0, [X.shape[1]])
-        theta0 = L.dot(z)
+        theta0 = L_inv.dot(z)
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
         theta1[0] = np.nan
 
@@ -102,24 +100,15 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         out = np.zeros(a.size, dtype=np.float)
         idx = (y > 0)
         a0, b0 = a[idx], b[idx]
-        out[idx] = - safe_log_logistic(a0)
-        #out[idx] = - b0 - np.log(1 - np.exp(- z[y][idx])) - \
-            #safe_log_logistic(a0)# - safe_log_logistic(b0)
-#        print(out[idx])
-#        print(np.log(safe_logistic(a0) - safe_logistic(b0)))
-        #out[idx] = np.log(safe_logistic(a0) - safe_logistic(b0))
-#        import ipdb; ipdb.set_trace()
+        out[idx] = - np.log(logistic(a0) - logistic(b0))
 
         a0 = a[y == 0]
-        out[y == 0] = - safe_log_logistic(a0)
-        #import ipdb; ipdb.set_trace()
-        if (~np.isfinite(out)).sum() > 0:
-            import ipdb; ipdb.set_trace()
+        out[y == 0] = - log_logistic(a0)
+
         if out.sum() < 0:
             import ipdb; ipdb.set_trace()
 
-        print(out.sum())
-        return out.sum()
+        return out.sum() + .5 * alpha * w.dot(w)
 
 
     def f_grad(x0, X, y):
@@ -127,7 +116,7 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         Gradient of the objective function
         """
         w, z = np.split(x0, [X.shape[1]])
-        theta0 = L.dot(z)
+        theta0 = L_inv.dot(z)
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
         theta1[0] = - np.inf
         Xw = X.dot(w)
@@ -135,25 +124,17 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
         b = theta1[y] - Xw
 
         # gradient for w
-        a0 = safe_logistic(a)
-        b0 = safe_logistic(b)
-        #import ipdb; ipdb.set_trace()
-        grad_w = - X.sum(0) + X.T.dot(1 - a0) + X.T.dot(1 - b0)
+        a0 = logistic(a)
+        b0 = logistic(b)
+        grad_w = X.T.dot((a0 * (1 - a0) - b0 * (1 - b0)) / (a0 - b0)) + alpha * w
 
-        tmp0 = 1 - a - \
-            1. / (1 - np.exp(theta0[y] - theta1[y]))
-        tmp0 = E0.dot(tmp0)
-        tmp1 = 1 - b - \
-            1. / (1 - np.exp(- (theta0[y] - theta1[y])))
-        tmp1 = E1.dot(tmp1)
-        grad_theta = - (tmp0 + tmp1)
-#        import ipdb; ipdb.set_trace()
+        L1_inv = np.roll(L_inv, 1, axis=0)
+        grad_z = -L_inv[y].T.dot((a0 * (1 - a0) / (a0 - b0)))
+        idx = y > 0
+        y0 = y[idx]
+        grad_z += L1_inv[y0].T.dot(b0[idx] * (1 - b0[idx]) / (a0[idx] - b0[idx]))
 
-        out = np.concatenate((grad_w, L.T.dot(grad_theta)))
-        approx_grad = optimize.approx_fprime(x0, f_obj, 1e-10, X, y)
-        print(approx_grad)
-        print(out)
-        import ipdb; ipdb.set_trace()
+        out = np.concatenate((grad_w, grad_z))
         return out
 
 
@@ -164,25 +145,17 @@ def ordinal_logistic_fit(X, y, max_iter=1000, verbose=False):
 
     def callback(x0):
         # check that gradient is correctly computed
-        check = optimize.check_grad(f_obj, f_grad, x0, X, y)
-        approx_grad = optimize.approx_fprime(x0, f_obj, 1e-10, X, y)
-        #print('Approx', approx_grad)
-        #print('Computed', f_grad(x0, X, y))
         print(f_obj(x0, X, y))
-        #print(check, f_obj(x0, X, y))
-        #assert np.abs(check) < 1e-3
 
     bounds = [(None, None)] * (X.shape[1] + 1) + [(1. / unique_y.size, None)] * (unique_y.size - 1)
-    options = {'maxiter' : max_iter, 'disp': 0, 'gtol': 1e-16, 'tol': 1e-32}
-    out = optimize.minimize(f_obj, x0, args=(X, y), method='L-BFGS-B', jac=f_grad,
-                            bounds=bounds, options=options, callback=callback)
-#    out = optimize.minimize(f_obj, out.x, args=(X, y), method='TNC', jac=f_grad,
-#                            bounds=bounds, options=options)
+    options = {'maxiter' : max_iter, 'disp': 0, 'gtol': 1e-3, 'tol': 1e-3, 'maxfun' : 100000000}
+    out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC', jac=f_grad,
+                            bounds=bounds, options=options)
 
     assert out.success
     w, z = np.split(out.x, [X.shape[1]])
-    theta = L.dot(z)
-    import ipdb; ipdb.set_trace()
+    theta = L_inv.dot(z)
+    #import ipdb; ipdb.set_trace()
     return w, theta[y][idx_inv]
 
 
