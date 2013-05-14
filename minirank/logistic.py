@@ -151,23 +151,21 @@ def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
     options = {'maxiter' : max_iter, 'disp': 0, 'gtol': 1e-3, 'tol': 1e-3, 'maxfun' : 100000000}
     out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC', jac=f_grad,
                             bounds=bounds, options=options)
-
     assert out.success
     w, z = np.split(out.x, [X.shape[1]])
     theta = L_inv.dot(z)
-    #import ipdb; ipdb.set_trace()
-    return w, theta[y][idx_inv]
+    return w, theta
 
 
-def ordinal_logistic_predict(w, theta, X, y):
+def ordinal_logistic_predict(w, theta, X):
     """
     Parameters
     ----------
     w : coefficients obtained by ordinal_logistic
     theta : thresholds
     """
-    unique_y = np.sort(np.unique(y))
-    unique_theta = np.unique(theta)
+    theta = np.sort(theta)
+    unique_theta = np.sort(np.unique(theta))
     mu = [-1]
     for i in range(unique_theta.size - 1):
         mu.append((unique_theta[i] + unique_theta[i+1]) / 2.)
@@ -175,7 +173,7 @@ def ordinal_logistic_predict(w, theta, X, y):
     out = X.dot(w)
     mu = np.array(mu)
     tmp = metrics.pairwise.pairwise_distances(out[:, None], mu[:, None])
-    return unique_y[np.argmin(tmp, 1)]
+    return np.argmin(tmp, 1)
 
 if __name__ == '__main__':
     DOC = """
