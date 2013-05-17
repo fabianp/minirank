@@ -9,6 +9,5 @@ setup(name='minirank',
     author_email='f@fabianp.net',
     url='',
     packages=['minirank'],
-    cmdclass = {'build_ext': build_ext},
     requires = ['numpy', 'scipy'],
 )
