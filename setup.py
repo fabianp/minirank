@@ -1,6 +1,4 @@
-from distutils.core import setup, Extension
-from Cython.Distutils import build_ext
-import glob
+from distutils.core import setup
 import numpy as np
 
 
