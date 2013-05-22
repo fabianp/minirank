@@ -91,7 +91,7 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         out = - np.log(phi(a0) - phi(b0))
 
         tmp = np.fmax(z[1:], 1e-6)
-        return out.sum() + .5 * alpha * w.dot(w) - np.log(tmp).sum()
+        return out.sum()# + .5 * alpha * w.dot(w) - np.log(tmp).sum()
 
 
     def f_grad(x0, X, y):
@@ -110,7 +110,9 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         a0 = phi(a)
         b0 = phi(b)
         b0[y == 0] = 0.
-        grad_w = X.T.dot((a0 * (1 - a0) - b0 * (1 - b0)) / (a0 - b0)) + alpha * w
+        grad_w = X.T.dot((a0 * (1 - a0) - b0 * (1 - b0)) / (a0 - b0)) + \
+         alpha * w
+        #grad_w = X.T.dot(-1 + a0 + b0)
 
         L1_inv = np.roll(L_inv, 1, axis=0)
         grad_z = -L_inv[y].T.dot((a0 * (1 - a0) / (a0 - b0)))
@@ -118,9 +120,8 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         idx = y > 0
         y0 = y[idx]
         b0 = b0[idx]
-        import ipdb; ipdb.set_trace()
         grad_z += L1_inv[y0].T.dot(b0 * (1 - b0) / (a0[idx] - b0))
-        grad_z[1:] -= 1. / np.fmax(z[1:], 1e-6)
+        #grad_z[1:] -= 1. / np.fmax(z[1:], 1e-6)
         out = np.concatenate((grad_w, grad_z))
         return out
 
@@ -131,6 +132,8 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
     x0[X.shape[1] + 1:] = 2. / unique_y.size
 
     print(optimize.check_grad(f_obj, f_grad, x0, X, y))
+    print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y))
+    print(f_grad(x0, X, y))
     import ipdb; ipdb.set_trace()
 
     def callback(x0):
