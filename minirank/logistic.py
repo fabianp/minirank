@@ -11,37 +11,26 @@ import numpy as np
 BIG = 1e10
 
 
+def phi(t):
+    # logistic function
+    idx = t > 0
+    out = np.empty(t.size, dtype=np.float)
+    out[idx] = 1. / (1 + np.exp(-t[idx]))
+    exp_t = np.exp(t[~idx])
+    out[~idx] = exp_t / (1. + exp_t)
+    return out
+
 def log_logistic(t):
-    """
-    compute log(1 / (1 + np.exp(-t))) in a stable way
-    """
-    #np.seterr(all='raise')
+    # logistic loss function
     idx = t > 0
-    out = np.zeros(t.size, dtype=np.float64)
-    t0 = t[idx]
-    out[idx] = - np.log(1 + np.exp(-t0))
-    t0 = t[~idx]
-    out[~idx] = t0 - np.log(1 + np.exp(t0))
-    #import ipdb; ipdb.set_trace()
-    #print(out)
-    assert np.all(out <= 0)
+    out = np.zeros_like(t)
+    out[idx] = np.log(1 + np.exp(-t[idx]))
+    out[~idx] = (-t[~idx] + np.log(1 + np.exp(t[~idx])))
+    out = out.sum()
     return out
 
 
-def logistic(t):
-    """
-    compute 1 / (1 + np.exp(-t))
-    """
-    idx = t > 0
-    out = np.zeros(t.size, dtype=np.float64)
-    t0 = t[idx]
-    out[idx] = 1. / (1 + np.exp(-t0))
-    t0 = t[~idx]
-    out[~idx] = np.exp(t0) / (1 + np.exp(t0))
-    return out
-
-
-def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
+def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
     """
     Ordinal logistic regression or proportional odds model.
     Uses scipy's optimize.fmin_slsqp solver.
@@ -82,7 +71,7 @@ def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
 
     # .. utility arrays used in f_grad ..
     L_inv = np.tril(np.ones((unique_y.size, unique_y.size)))
-    alpha = 1.
+    alpha = 0.
 
 
     def f_obj(x0, X, y):
@@ -92,23 +81,17 @@ def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
         w, z = np.split(x0, [X.shape[1]])
         theta0 = L_inv.dot(z)
         theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
-        theta1[0] = np.nan
 
         Xw = X.dot(w)
         a = theta0[y] - Xw
         b = theta1[y] - Xw
-        out = np.zeros(a.size, dtype=np.float)
-        idx = (y > 0)
-        a0, b0 = a[idx], b[idx]
-        out[idx] = - np.log(logistic(a0) - logistic(b0))
+        a0 = phi(a)
+        b0 = phi(b)
+        b0[y == 0] = 0.
+        out = - np.log(phi(a0) - phi(b0))
 
-        a0 = a[y == 0]
-        out[y == 0] = - log_logistic(a0)
-
-        if out.sum() < 0:
-            import ipdb; ipdb.set_trace()
-
-        return out.sum() + .5 * alpha * w.dot(w)
+        tmp = np.fmax(z[1:], 1e-6)
+        return out.sum() + .5 * alpha * w.dot(w) - np.log(tmp).sum()
 
 
     def f_grad(x0, X, y):
@@ -124,16 +107,20 @@ def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
         b = theta1[y] - Xw
 
         # gradient for w
-        a0 = logistic(a)
-        b0 = logistic(b)
+        a0 = phi(a)
+        b0 = phi(b)
+        b0[y == 0] = 0.
         grad_w = X.T.dot((a0 * (1 - a0) - b0 * (1 - b0)) / (a0 - b0)) + alpha * w
 
         L1_inv = np.roll(L_inv, 1, axis=0)
         grad_z = -L_inv[y].T.dot((a0 * (1 - a0) / (a0 - b0)))
+
         idx = y > 0
         y0 = y[idx]
-        grad_z += L1_inv[y0].T.dot(b0[idx] * (1 - b0[idx]) / (a0[idx] - b0[idx]))
-
+        b0 = b0[idx]
+        import ipdb; ipdb.set_trace()
+        grad_z += L1_inv[y0].T.dot(b0 * (1 - b0) / (a0[idx] - b0))
+        grad_z[1:] -= 1. / np.fmax(z[1:], 1e-6)
         out = np.concatenate((grad_w, grad_z))
         return out
 
@@ -143,14 +130,17 @@ def ordinal_logistic_fit(X, y, max_iter=5000, verbose=False):
     x0[X.shape[1]] = -.5
     x0[X.shape[1] + 1:] = 2. / unique_y.size
 
+    print(optimize.check_grad(f_obj, f_grad, x0, X, y))
+    import ipdb; ipdb.set_trace()
+
     def callback(x0):
         # check that gradient is correctly computed
         print(f_obj(x0, X, y))
 
     bounds = [(None, None)] * (X.shape[1] + 1) + [(1. / unique_y.size, None)] * (unique_y.size - 1)
-    options = {'maxiter' : max_iter, 'disp': 0, 'gtol': 1e-3, 'tol': 1e-3, 'maxfun' : 100000000}
+    options = {'maxiter' : max_iter, 'disp': 0, }
     out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC', jac=f_grad,
-                            bounds=bounds, options=options)
+                           options=options, callback=callback)
 
     assert out.success
     w, z = np.split(out.x, [X.shape[1]])
