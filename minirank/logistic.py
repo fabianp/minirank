@@ -7,6 +7,7 @@ from __future__ import print_function
 from sklearn import utils, metrics
 from scipy import linalg, optimize, sparse
 import numpy as np
+import warnings
 
 BIG = 1e10
 
@@ -145,7 +146,8 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
     out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC', jac=f_grad,
                            options=options, callback=callback)
 
-    assert out.success
+    if not out.success:
+        warnings.warn(out.message)
     w, z = np.split(out.x, [X.shape[1]])
     theta = L_inv.dot(z)
     return w, theta
