@@ -75,8 +75,7 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
     unique_y = np.unique(y)
 
     # .. utility arrays used in f_grad ..
-    L_inv = np.tril(np.ones((unique_y.size, unique_y.size)))
-    alpha = 1.
+    alpha = 0.
     k1 = np.sum(y == unique_y[0])
     E0 = (y[:, np.newaxis] == np.unique(y)).astype(np.int)
     E1 = np.roll(E0, -1, axis=-1)
@@ -126,7 +125,11 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         grad_w = -X[k1:].T.dot(phi_b) + X.T.dot(1 - phi_a) + alpha * w
 
         # gradient for theta
-        grad_theta = (E1 - E0)[:, k1:].dot(1. / (np.exp(-c) - 1)) \
+        idx = c > 0
+        tmp = np.empty_like(c)
+        tmp[idx] = 1. / (np.exp(-c[idx]) - 1)
+        tmp[~idx] = np.exp(c[~idx]) / (1 - np.exp(c[~idx])) # should not need
+        grad_theta = (E1 - E0)[:, k1:].dot(tmp) \
             + E0[:, k1:].dot(phi_b) - E0.dot(1 - phi_a)
 
         grad_theta[:-1] += 1. / np.diff(theta_0)
@@ -135,19 +138,32 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         return out
 
     def f_hess(x0, X, y):
-        w, z = np.split(x0, [X.shape[1]])
-        theta0 = L_inv.dot(z)
-        theta1 = np.roll(theta0, 1)  # theta_{y_i - 1}
-        theta1[0] = - np.inf
-        Xw = X.dot(w)
-        a = theta0[y] - Xw
-        b = theta1[y] - Xw
+        w, theta_0 = np.split(x0, [X.shape[1]])
+        theta_1 = np.roll(theta_0, 1)
+        t0 = theta_0[y]
+        t1 = theta_1[y]
+        z = np.diff(theta_0)
 
-        D = np.diag(phi(a) * (1 - phi(a)) + phi(b) * (1 - phi(b)))
-        tmp = X.T.dot(D).dot(X)
+        Xw = X.dot(w)
+        a = t0 - Xw
+        b = t0[k1:] - X[k1:].dot(w)
+        c = (theta_1 - theta_0)[y][k1:]
+
+        D = np.diag(phi(a) * (1 - phi(a)))
+        D_= np.diag(phi(b) * (1 - phi(b)))
+        tmp = X[k1:].T.dot(D_).dot(X[k1:]) + X.T.dot(D).dot(X)
+        import pylab as pl
+        pl.matshow(tmp)
+        pl.colorbar()
+        pl.title('True')
         import numdifftools as nd
         Hess = nd.Hessian(lambda x: f_obj(x, X, y))
         H = Hess(x0)
+        pl.matshow(H[:tmp.shape[0], :tmp.shape[0]])
+        #pl.matshow()
+        pl.title('estimated')
+        pl.colorbar()
+        pl.show()
         import ipdb; ipdb.set_trace()
 
 
@@ -158,17 +174,17 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
     print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y))
     print(f_grad(x0, X, y))
     #print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y) - f_grad(x0, X, y))
-    import ipdb; ipdb.set_trace()
+    #import ipdb; ipdb.set_trace()
 
     def callback(x0):
         print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
-        #f_hess(x0, X, y)
+        f_hess(x0, X, y)
         if verbose:
         # check that gradient is correctly computed
             print('OBJ: %s' % f_obj(x0, X, y))
 
-    options = {'maxiter' : max_iter, 'disp': 0, 'maxfun':10000}
-    out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC',
+    options = {'maxiter' : max_iter, 'disp': 1, 'maxfun':10000}
+    out = optimize.minimize(f_obj, x0, args=(X, y), method='L-BFGS-B',
                             jac=f_grad,
                            options=options, callback=callback)
 
