@@ -10,6 +10,7 @@ import numpy as np
 import warnings
 
 BIG = 1e10
+SMALL = 1e-12
 
 
 def phi(t):
@@ -75,62 +76,62 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
 
     # .. utility arrays used in f_grad ..
     L_inv = np.tril(np.ones((unique_y.size, unique_y.size)))
-    alpha = 0.
+    alpha = 1.
     k1 = np.sum(y == unique_y[0])
-
+    E0 = (y[:, np.newaxis] == np.unique(y)).astype(np.int)
+    E1 = np.roll(E0, -1, axis=-1)
+    E1[:, -1] = 0.
+    E0, E1 = map(sparse.csr_matrix, (E0.T, E1.T))
 
     def f_obj(x0, X, y):
         """
         Objective function
         """
-        w, z = np.split(x0, [X.shape[1]])
-        theta_0 = L_inv.dot(z)
+        w, theta_0 = np.split(x0, [X.shape[1]])
         theta_1 = np.roll(theta_0, 1)
         t0 = theta_0[y]
-        t1 = theta_1[y]
+        z = np.diff(theta_0)
 
         Xw = X.dot(w)
         a = t0 - Xw
-        b = t1[k1:] - Xw[:-k1]
+        b = t0[k1:] - X[k1:].dot(w)
         c = (theta_1 - theta_0)[y][k1:]
 
         loss = b.sum() - np.log(1 - np.exp(c)).sum() + log_logistic(b).sum() \
-            + log_logistic(a).sum()
-        #import ipdb; ipdb.set_trace()
-        tmp = loss + .5 * alpha * w.dot(w) - np.log(z[1:]).sum()
-        print(tmp)
-        return tmp
+            + log_logistic(a).sum() \
+            + .5 * alpha * w.dot(w) - np.log(z).sum()  # penalty
+        if np.isnan(loss):
+            pass
+            #import ipdb; ipdb.set_trace()
+        return loss
 
     def f_grad(x0, X, y):
         """
         Gradient of the objective function
         """
-        w, z = np.split(x0, [X.shape[1]])
-        theta_0 = L_inv.dot(z)
+        w, theta_0 = np.split(x0, [X.shape[1]])
         theta_1 = np.roll(theta_0, 1)
         t0 = theta_0[y]
         t1 = theta_1[y]
+        z = np.diff(theta_0)
 
         Xw = X.dot(w)
         a = t0 - Xw
-        b = t1[k1:] - Xw[:-k1]
+        b = t0[k1:] - X[k1:].dot(w)
         c = (theta_1 - theta_0)[y][k1:]
 
         # gradient for w
         phi_a = phi(a)
         phi_b = phi(b)
-        grad_w = - X[k1:].T.dot(phi_b) - X.T.dot(1 - phi_a) + alpha * w
+        grad_w = -X[k1:].T.dot(phi_b) + X.T.dot(1 - phi_a) + alpha * w
 
-        # gradient for z
-        L1_inv = np.roll(L_inv, 1, axis=0)
-        grad_z = -L_inv[y].T.dot((phi_a * (1 - phi_a) / (phi_a - phi_b)))
+        # gradient for theta
+        grad_theta = (E1 - E0)[:, k1:].dot(1. / (np.exp(-c) - 1)) \
+            + E0[:, k1:].dot(phi_b) - E0.dot(1 - phi_a)
 
-        idx = y > 0
-        y0 = y[idx]
-        phi_b = phi_b[idx]
-        grad_z += L1_inv[y0].T.dot(phi_b * (1 - phi_b) / (phi_a[idx] - phi_b))
-        grad_z[1:] -= 1. / np.fmax(z[1:], 1e-6)
-        out = np.concatenate((grad_w, grad_z))
+        grad_theta[:-1] += 1. / np.diff(theta_0)
+        grad_theta[1:] -= 1. / np.diff(theta_0)
+        out = np.concatenate((grad_w, grad_theta))
         return out
 
     def f_hess(x0, X, y):
@@ -151,30 +152,30 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
 
 
     x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
-    x0[X.shape[1]] = -.5
-    x0[X.shape[1] + 1:] = 2. / unique_y.size
+    x0[X.shape[1]:] = np.sort(unique_y.size * np.random.rand(unique_y.size))
 
     print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
     print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y))
     print(f_grad(x0, X, y))
-    print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y) - f_grad(x0, X, y))
+    #print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y) - f_grad(x0, X, y))
     import ipdb; ipdb.set_trace()
 
     def callback(x0):
+        print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
         #f_hess(x0, X, y)
         if verbose:
         # check that gradient is correctly computed
             print('OBJ: %s' % f_obj(x0, X, y))
 
-    bounds = [(None, None)] * (X.shape[1] + 1) + [(1. / unique_y.size, None)] * (unique_y.size - 1)
-    options = {'maxiter' : max_iter, 'disp': 0, }
-    out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC', jac=f_grad,
+    options = {'maxiter' : max_iter, 'disp': 0, 'maxfun':10000}
+    out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC',
+                            jac=f_grad,
                            options=options, callback=callback)
 
     if not out.success:
         warnings.warn(out.message)
-    w, z = np.split(out.x, [X.shape[1]])
-    theta = L_inv.dot(z)
+    w, theta = np.split(out.x, [X.shape[1]])
+    import ipdb; ipdb.set_trace()
     return w, theta
 
 
