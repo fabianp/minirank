@@ -153,8 +153,8 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         D_= np.diag(phi(b) * (1 - phi(b)))
         tmp = X[k1:].T.dot(D_).dot(X[k1:]) + X.T.dot(D).dot(X)
 
-        tmp = X[k1:].T.dot(D_).dot(E1[:, k1:].T.toarray()) \
-            + X.T.dot(D).dot(E0.T.toarray())s
+        tmp = - X[k1:].T.dot(D_).dot(E0[:, k1:].T.toarray()) \
+            - X.T.dot(D).dot(E0.T.toarray())
         import pylab as pl
         pl.matshow(tmp)
         pl.colorbar()
@@ -162,7 +162,7 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         import numdifftools as nd
         Hess = nd.Hessian(lambda x: f_obj(x, X, y))
         H = Hess(x0)
-        pl.matshow(H[tmp.shape[0]:, :tmp.shape[0]])
+        pl.matshow(H[:tmp.shape[0], tmp.shape[0]:])
         #pl.matshow()
         pl.title('estimated')
         pl.colorbar()
