@@ -96,7 +96,13 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         b = t0[k1:] - X[k1:].dot(w)
         c = (theta_1 - theta_0)[y][k1:]
 
-        loss = b.sum() - np.log(1 - np.exp(c)).sum() + log_logistic(b).sum() \
+        if np.any(c > 0):
+            return BIG
+
+        #loss = -(c[idx] + np.log(np.exp(-c[idx]) - 1)).sum()
+        loss = -np.log(1 - np.exp(c)).sum()
+
+        loss += b.sum() + log_logistic(b).sum() \
             + log_logistic(a).sum() \
             + .5 * alpha * w.dot(w) - np.log(z).sum()  # penalty
         if np.isnan(loss):
@@ -137,7 +143,8 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         out = np.concatenate((grad_w, grad_theta))
         return out
 
-    def f_hess(x0, X, y):
+    def f_hess(x0, s, X, y):
+        x0 = np.asarray(x0)
         w, theta_0 = np.split(x0, [X.shape[1]])
         theta_1 = np.roll(theta_0, 1)
         t0 = theta_0[y]
@@ -151,50 +158,59 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
 
         D = np.diag(phi(a) * (1 - phi(a)))
         D_= np.diag(phi(b) * (1 - phi(b)))
-        tmp = X[k1:].T.dot(D_).dot(X[k1:]) + X.T.dot(D).dot(X)
-
-        tmp = - X[k1:].T.dot(D_).dot(E0[:, k1:].T.toarray()) \
+        D1 = np.diag(np.exp(-c) / (np.exp(-c) - 1) ** 2)
+        Ex = (E1 - E0)[:, k1:].toarray()
+        Ex0 = E0.toarray()
+        H_A = X[k1:].T.dot(D_).dot(X[k1:]) + X.T.dot(D).dot(X)
+        H_C = - X[k1:].T.dot(D_).dot(E0[:, k1:].T.toarray()) \
             - X.T.dot(D).dot(E0.T.toarray())
+        H_B = Ex.dot(D1).dot(Ex.T) + Ex0[:, k1:].dot(D_).dot(Ex0[:, k1:].T) \
+            - Ex0.dot(D).dot(Ex0.T)
+
+        p_w = H_A.shape[0]
+        tmp0 = H_A.dot(s[:p_w]) + H_C.dot(s[p_w:])
+        tmp1 = H_C.T.dot(s[:p_w]) + H_B.dot(s[p_w:])
+        return np.concatenate((tmp0, tmp1))
+
+        import ipdb; ipdb.set_trace()
         import pylab as pl
-        pl.matshow(tmp)
+        pl.matshow(H_B)
         pl.colorbar()
         pl.title('True')
         import numdifftools as nd
         Hess = nd.Hessian(lambda x: f_obj(x, X, y))
         H = Hess(x0)
-        pl.matshow(H[:tmp.shape[0], tmp.shape[0]:])
+        pl.matshow(H[H_A.shape[0]:, H_A.shape[0]:])
         #pl.matshow()
         pl.title('estimated')
         pl.colorbar()
         pl.show()
-        import ipdb; ipdb.set_trace()
 
 
     x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
     x0[X.shape[1]:] = np.sort(unique_y.size * np.random.rand(unique_y.size))
 
-    print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
-    print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y))
-    print(f_grad(x0, X, y))
+    #print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
+    #print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y))
+    #print(f_grad(x0, X, y))
     #print(optimize.approx_fprime(x0, f_obj, 1e-6, X, y) - f_grad(x0, X, y))
     #import ipdb; ipdb.set_trace()
 
     def callback(x0):
-        print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
-        f_hess(x0, X, y)
+        x0 = np.asarray(x0)
+        #print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
         if verbose:
         # check that gradient is correctly computed
             print('OBJ: %s' % f_obj(x0, X, y))
 
-    options = {'maxiter' : max_iter, 'disp': 1, 'maxfun':10000}
-    out = optimize.minimize(f_obj, x0, args=(X, y), method='L-BFGS-B',
-                            jac=f_grad,
-                           options=options, callback=callback)
+    options = {'maxiter' : max_iter, 'disp': 0, 'maxfun':10000}
+    out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC',
+        jac=f_grad, hessp=f_hess, options=options, callback=None)
 
     if not out.success:
+        import ipdb; ipdb.set_trace()
         warnings.warn(out.message)
     w, theta = np.split(out.x, [X.shape[1]])
-    import ipdb; ipdb.set_trace()
     return w, theta
 
 
