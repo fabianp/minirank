@@ -35,7 +35,7 @@ def log_logistic(t):
     return out
 
 
-def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
+def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False, solver='TNC'):
     """
     Ordinal logistic regression or proportional odds model.
     Uses scipy's optimize.fmin_slsqp solver.
@@ -187,6 +187,11 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
         pl.show()
 
 
+    def grad_hess(x0, X, y):
+        grad = f_grad(x0, X, y)
+        hess = lambda x: f_hess(x0, x, X, y)
+        return grad, hess
+
     x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
     x0[X.shape[1]:] = np.sort(unique_y.size * np.random.rand(unique_y.size))
 
@@ -198,17 +203,20 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False):
 
     def callback(x0):
         x0 = np.asarray(x0)
-        #print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
+        print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
         if verbose:
         # check that gradient is correctly computed
             print('OBJ: %s' % f_obj(x0, X, y))
 
-    options = {'maxiter' : max_iter, 'disp': 0, 'maxfun':10000}
-    out = optimize.minimize(f_obj, x0, args=(X, y), method='TNC',
-        jac=f_grad, hessp=f_hess, options=options, callback=None)
+    if solver == 'TRON':
+        import pytron
+        out = pytron.minimize(f_obj, grad_hess, x0, args=(X, y))
+    else:
+        options = {'maxiter' : max_iter, 'disp': 0, 'maxfun':10000}
+        out = optimize.minimize(f_obj, x0, args=(X, y), method=solver,
+            jac=f_grad, hessp=f_hess, options=options, callback=callback)
 
     if not out.success:
-        import ipdb; ipdb.set_trace()
         warnings.warn(out.message)
     w, theta = np.split(out.x, [X.shape[1]])
     return w, theta
@@ -260,7 +268,8 @@ if __name__ == '__main__':
         assert np.all(np.unique(y[train]) == np.unique(y))
         train = np.sort(train)
         test = np.sort(test)
-        w, theta = ordinal_logistic_fit(X[train], y[train], verbose=True)
+        w, theta = ordinal_logistic_fit(X[train], y[train], verbose=True,
+                                        solver='TNC')
         pred = ordinal_logistic_predict(w, theta, X[test])
         s = metrics.mean_absolute_error(y[test], pred)
         print('ERROR (ORDINAL)  fold %s: %s' % (i+1, s))
