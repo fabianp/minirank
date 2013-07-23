@@ -229,16 +229,11 @@ def ordinal_logistic_predict(w, theta, X):
     w : coefficients obtained by ordinal_logistic
     theta : thresholds
     """
-    theta = np.sort(theta)
     unique_theta = np.sort(np.unique(theta))
-    mu = [-1]
-    for i in range(unique_theta.size - 1):
-        mu.append((unique_theta[i] + unique_theta[i+1]) / 2.)
-        # todo: use roll
     out = X.dot(w)
-    mu = np.array(mu)
-    tmp = metrics.pairwise.pairwise_distances(out[:, None], mu[:, None])
-    return np.argmin(tmp, 1)
+    unique_theta[-1] = np.inf # p(y <= max_level) = 1
+    tmp = out[:, None].repeat(unique_theta.size, axis=1)
+    return np.argmax(tmp < unique_theta, axis=1)
 
 if __name__ == '__main__':
     DOC = """
