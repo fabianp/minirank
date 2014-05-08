@@ -1,6 +1,6 @@
 from distutils.core import setup
 import numpy as np
-
+import setuptools
 
 setup(name='minirank',
     version='0.1',

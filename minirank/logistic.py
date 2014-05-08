@@ -35,7 +35,8 @@ def log_logistic(t):
     return out
 
 
-def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False, solver='TNC'):
+def ordinal_logistic_fit(X, y, alpha=0, max_iter=10000,
+                         verbose=False, solver='TNC', w0=None):
     """
     Ordinal logistic regression or proportional odds model.
     Uses scipy's optimize.fmin_slsqp solver.
@@ -61,6 +62,9 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False, solver='TNC'):
 
     X = utils.safe_asarray(X)
     y = np.asarray(y)
+
+    if not X.shape[0] == y.shape[0]:
+        raise ValueError('Wrong shape for X and y')
 
     # .. order input ..
     idx = np.argsort(y)
@@ -193,6 +197,10 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False, solver='TNC'):
         return grad, hess
 
     x0 = np.random.randn(X.shape[1] + unique_y.size) / X.shape[1]
+    if w0 is not None:
+        x0[:X.shape[1]] = w0
+    else:
+        x0[:X.shape[1]] = 0.
     x0[X.shape[1]:] = np.sort(unique_y.size * np.random.rand(unique_y.size))
 
     #print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
@@ -203,7 +211,7 @@ def ordinal_logistic_fit(X, y, max_iter=10000, verbose=False, solver='TNC'):
 
     def callback(x0):
         x0 = np.asarray(x0)
-        print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
+        # print('Check grad: %s' % optimize.check_grad(f_obj, f_grad, x0, X, y))
         if verbose:
         # check that gradient is correctly computed
             print('OBJ: %s' % f_obj(x0, X, y))
