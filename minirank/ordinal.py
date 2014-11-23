@@ -7,7 +7,7 @@ in http://arxiv.org/abs/1408.2327
 import numpy as np
 from scipy import optimize, linalg, stats
 
-from sklearn import base
+from sklearn import base, metrics
 
 
 def sigmoid(t):
@@ -106,7 +106,7 @@ def threshold_fit(X, y, alpha, n_class, mode='AE', verbose=False):
     sol = optimize.minimize(obj_margin, x0,
         args=(X, y, alpha, n_class, weights), method='L-BFGS-B', bounds=bounds)
     if not sol.success:
-        print(sol.status)
+        print(sol.message)
     w, c = sol.x[:X.shape[1]], sol.x[X.shape[1]:]
     theta = np.cumsum(c)
     return w, theta
