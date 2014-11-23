@@ -132,7 +132,7 @@ class MarginOR(base.BaseEstimator):
         self.verbose = verbose
 
     def fit(self, X, y):
-        self.w_, self.theta_ = threshold_fit(X, y, self.alpha, n_class,
+        self.w_, self.theta_ = threshold_fit(X, y, self.alpha, self.n_class,
             mode=self.mode, verbose=self.verbose)
         return self
 
