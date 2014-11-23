@@ -2,70 +2,117 @@
 some ordinal regression algorithms
 """
 import numpy as np
-from scipy import optimize, linalg
+from scipy import optimize, linalg, stats
 
 def sigma(t):
+    # sigmoid function, 1 / (1 + exp(-t))
+    # stable computation
+    idx = t > 0
+    out = np.zeros_like(t)
+    out[idx] = 1. / (1 + np.exp(-t[idx]))
+    exp_t = np.exp(t[~idx])
+    out[~idx] = exp_t / (1. + exp_t)
+    return out
+
+
+def logloss(Z):
+    # stable computation of the logistic loss
+    idx = Z > 0
+    out = np.zeros_like(Z)
+    out[idx] = np.log(1 + np.exp(-Z[idx]))
+    out[~idx] = (-Z[~idx] + np.log(1 + np.exp(Z[~idx])))
+    return out
+
+
+def obj_margin(x0, X, y, alpha, n_class, weights):
     """
-    logistic function, returns 1 / (1 + exp(-t))
+    Objective function for the general margin-based formulation
     """
-    return 1. / (1 + np.exp(-t))
 
-def psi(t):
-    """logistic loss"""
-    return - np.log(sigma(t))
-
-def psi_prime(t):
-    """derivative of logistic loss"""
-    return sigma(t) - 1
-
-def loss_logistic_immediate(x0, X, idx, alpha):
-    X = np.array(X)
     w = x0[:X.shape[1]]
-    theta = x0[X.shape[1]:]
+    c = x0[X.shape[1]:]
+    theta = np.cumsum(c)
+    W = weights[y]
+
     Xw = X.dot(w)
-    out = 0.
-    for i in range(idx.shape[0]):
-        Xwi = Xw[idx[i]]
-        if i == 0:
-            f1 = theta[0] - Xwi
-            out += np.sum(psi(f1))
-        elif i == idx.shape[0] - 1:
-            fk1 = theta[i-1] - Xwi
-            out += np.sum(psi(-fk1))
-        else:
-            fy1 = theta[i-1] - Xwi
-            fy = theta[i] - Xwi
-            out += np.sum(psi(-fy1) + psi(fy))
-    return out + alpha * (linalg.norm(w) ** 2)
+    Alpha = theta[:, None] - Xw # (n_class - 1, n_samples)
+    idx = np.arange(n_class - 1)[:, None] < y
+    Alpha[idx] *= -1
+
+    return np.sum(W.T * logloss(Alpha)) / float(X.shape[0])
 
 
-def grad_logistic_immediate(x0, X, idx):
-    X = np.array(X)
+def grad_margin(x0, X, y, alpha, n_class, weights):
+    """
+    Gradient for the general margin-based formulation
+    """
+
     w = x0[:X.shape[1]]
-    theta = x0[X.shape[1]:]
-    Xw = X.dot(w)
-    return
+    c = x0[X.shape[1]:]
+    theta = np.cumsum(c)
+    W = weights[y]
 
-def logisitc_immediate(X, y, alpha):
+    Xw = X.dot(w)
+    Alpha = theta[:, None] - Xw # (n_class - 1, n_samples)
+    idx = np.arange(n_class - 1)[:, None] < y
+    Alpha[idx] *= -1
+    W[idx.T] *= -1
+
+    Sigma = W.T * sigma(-Alpha)
+
+    grad_w = X.T.dot(Sigma.sum(0)) / float(X.shape[0]) 
+
+    grad_theta = - Sigma.sum(1) / float(X.shape[0])
+
+    tmp = np.concatenate(([0], grad_theta))
+    grad_c = np.sum(grad_theta) - np.cumsum(tmp[:-1])
+
+    return np.concatenate((grad_w, grad_c), axis=0)
+
+
+
+def threshold_fit(X, y, alpha, n_class, mode='AE', verbose=False):
     """
-    Logisitc regression: immediate threshold
+    Solve the general threshold-based ordinal regression model
+    using the logistic loss as surrogate of the 0-1 loss
+
+    Parameters
+    ----------
+    mode : string, one of {'AE', '0-1'}
+
     """
-    X = np.array(X)
-    y = np.array(y)
-    y_unique = np.unique(y)
-    idx = (y_unique[:, None] == y)
-    x0 = np.zeros(y_unique.shape[0] + X.shape[1])
-    sol = optimize.minimize(loss_logistic_immediate, x0, args=(X, idx, alpha))
-    print(sol)
-    return sol.x
+
+    X = np.asarray(X)
+    y = np.asarray(y) # XXX check its made of integers
+    n_samples, n_features = X.shape
+
+    if mode == 'AE':
+        weights = np.ones((n_class, n_class - 1))
+    elif mode == '0-1':
+        weights = np.diag(np.ones(n_class - 1)) + \
+            np.diag(np.ones(n_class - 2), k=-1)
+        weights = np.vstack((weights, np.zeros(n_class -1)))
+        weights[-1, -1] = 1
+
 
 
 if __name__ == '__main__':
-    n, p = 1000, 10
-    X = 5 * np.random.randn(n, p)
-    w = np.random.randn(p)
-    y = np.floor(X.dot(w)).astype(np.int)
+
+    np.random.seed(1)
+    from sklearn import datasets
+    n_class = 5
+    n_samples = 100
+
+    weights = np.ones((n_class, n_class - 1))
+
+    X, y = datasets.make_regression(n_features=10, noise=20.5)
+    bins = stats.mstats.mquantiles(y, np.linspace(0, 1, n_class + 1))
+    y = np.digitize(y, bins[:-1])
     y -= np.min(y)
+    print X.shape
     print y
-    sol = logisitc_immediate(X, y, .1)
-    print sol[:p] / w
+
+    x0 = np.random.randn(X.shape[1] + n_class - 1)
+    x0[X.shape[1]+1:] = np.abs(x0[X.shape[1]+1:])
+    print optimize.approx_fprime(x0, obj_margin, 1e-3, X, y, 0., n_class, weights)
+    print grad_margin(x0, X, y, 0., n_class, weights)
