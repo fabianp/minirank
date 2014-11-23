@@ -4,7 +4,7 @@ Implementation of logistic ordinal regression (aka proportional odds) model
 
 from __future__ import print_function
 
-from sklearn import utils, metrics
+from sklearn import metrics
 from scipy import linalg, optimize, sparse
 import numpy as np
 import warnings
@@ -26,7 +26,7 @@ def phi(t):
 
 def log_logistic(t):
     """
-    logistic loss function, returns - log(1 / (1 + exp(-t)))
+    (minus) logistic loss function, returns log(1 / (1 + exp(-t)))
     """
     idx = t > 0
     out = np.zeros_like(t)
@@ -60,7 +60,7 @@ def ordinal_logistic_fit(X, y, alpha=0, max_iter=10000,
         vector of thresholds
     """
 
-    X = utils.safe_asarray(X)
+    X = np.asarray(X)
     y = np.asarray(y)
 
     if not X.shape[0] == y.shape[0]:
