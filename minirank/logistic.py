@@ -35,7 +35,7 @@ def log_logistic(t):
     return out
 
 
-def ordinal_logistic_fit(X, y, alpha=0, max_iter=10000,
+def ordinal_logistic_fit(X, y, alpha=0, l1_ratio=0, n_class=None, max_iter=10000,
                          verbose=False, solver='TNC', w0=None):
     """
     Ordinal logistic regression or proportional odds model.
@@ -62,6 +62,7 @@ def ordinal_logistic_fit(X, y, alpha=0, max_iter=10000,
 
     X = np.asarray(X)
     y = np.asarray(y)
+    w0 = None
 
     if not X.shape[0] == y.shape[0]:
         raise ValueError('Wrong shape for X and y')
