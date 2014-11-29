@@ -90,11 +90,21 @@ def grad_margin(x0, X, y, alpha, n_class, weights):
 
 def obj_multiclass(x0, X, y, alpha, n_class):
     n_samples, n_features = X.shape
-    W = x0.reshape((n_features + 1, n_class))
-    
+    W = x0.reshape((n_features + 1, n_class-1))
+    Wk = - W.sum(1)[:, None]
+    W = np.concatenate((W, Wk), axis=1)
+    X = np.concatenate((X, np.ones((n_samples, 1)) / float(n_samples)), axis=1)
+
+    L = np.abs(np.arange(n_class)[:, None] - np.arange(n_class))
+    obj = L[y] * log_loss(X.dot(W))
+    penalty = alpha * np.trace(X.T.dot(X))
+    return obj + penalty
 
 
-def threshold_fit(X, y, alpha, n_class, mode='AE', verbose=False, 
+
+
+
+def threshold_fit(X, y, alpha, n_class, mode='AE', verbose=False,
                   maxiter=10000, bounds=False):
     """
     Solve the general threshold-based ordinal regression model
@@ -149,10 +159,24 @@ def threshold_predict(X, w, theta):
 
 
 def multiclass_fit(X, y, alpha, n_class):
+    X = np.asarray(X)
+    y = np.asarray(y) # XXX check its made of integers
+    n_samples, n_features = X.shape
+
+
+    x0 = np.zeros((n_features + 1) * (n_class - 1))
+    options = {'maxiter' : maxiter}
+    sol = optimize.minimize(obj_multiclass, x0,
+        args=(X, y, alpha, n_class), method='L-BFGS-B',
+        options=options)
+    if not sol.success:
+        print(sol.message)
+    W = sol.x.reshape((n_features + 1, n_class-1))
+    return W
 
 
 class MarginOR(base.BaseEstimator):
-    def __init__(self, n_class=2, alpha=1., mode='AE', scoring='AE', 
+    def __init__(self, n_class=2, alpha=1., mode='AE', scoring='AE',
         verbose=0, maxiter=10000):
         self.alpha = alpha
         self.mode = mode
@@ -197,14 +221,16 @@ if __name__ == '__main__':
 
     cv = cross_validation.KFold(y.size)
     for train, test in cv:
-        w, theta = threshold_fit(X[train], y[train], 1., n_class, mode='0-1', 
+        w, theta = threshold_fit(X[train], y[train], 1., n_class, mode='0-1',
                                  bounds=False)
         print(np.argsort(theta))
         print(theta)
         pred = threshold_predict(X[test], w, theta)
         # print metrics.mean_absolute_error(pred, y)
         print metrics.accuracy_score(pred, y[test])
-        
+
         pred = svm.LinearSVC().fit(X[train], y[train]).predict(X[test])
         print metrics.accuracy_score(pred, y[test])
         print
+
+
