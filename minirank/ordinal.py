@@ -96,7 +96,7 @@ def obj_multiclass(x0, X, y, alpha, n_class):
     X = np.concatenate((X, np.ones((n_samples, 1))), axis=1)
 
     L = np.abs(np.arange(n_class)[:, None] - np.arange(n_class))
-    obj = (L[y] * log_loss(-X.dot(W))).sum()
+    obj = (L[y] * log_loss(-X.dot(W))).sum() / float(n_samples)
     penalty = alpha * np.trace(X.T.dot(X))
     return obj + penalty
 
@@ -171,7 +171,6 @@ def multiclass_fit(X, y, alpha, n_class, maxiter=100000):
     y = np.asarray(y) # XXX check its made of integers
     n_samples, n_features = X.shape
 
-
     x0 = np.zeros((n_features + 1) * (n_class - 1))
     options = {'maxiter' : maxiter}
     sol = optimize.minimize(obj_multiclass, x0, jac=False,
@@ -190,11 +189,10 @@ def multiclass_predict(X, W):
 
 
 class MarginOR(base.BaseEstimator):
-    def __init__(self, n_class=2, alpha=1., mode='AE', scoring='AE',
+    def __init__(self, n_class=2, alpha=1., mode='AE',
         verbose=0, maxiter=10000):
         self.alpha = alpha
         self.mode = mode
-        self.scoring = scoring
         self.n_class = n_class
         self.verbose = verbose
         self.maxiter = maxiter
@@ -210,6 +208,27 @@ class MarginOR(base.BaseEstimator):
     def score(self, X, y):
         pred = self.predict(X)
         return METRIC(pred, y)
+
+
+class MulticlassOR(base.BaseEstimator):
+    def __init__(self, n_class=2, alpha=1.,
+        verbose=0, maxiter=10000):
+        self.alpha = alpha
+        self.n_class = n_class
+        self.verbose = verbose
+        self.maxiter = maxiter
+
+    def fit(self, X, y):
+        self.W_ = multiclass_fit(X, y, self.alpha, self.n_class)
+        return self
+
+    def predict(self, X):
+        return multiclass_predict(X, self.W_)
+
+    def score(self, X, y):
+        pred = self.predict(X)
+        return METRIC(pred, y)
+
 
 
 if __name__ == '__main__':

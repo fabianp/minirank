@@ -39,24 +39,24 @@ class RidgeOR(linear_model.Ridge):
         return METRIC(y, pred)
 
 
+if hasattr(svm, 'LinearSVR'):
+    class LAD(svm.LinearSVR):
+        """
+        Least Absolute Deviation
+        """
 
-class LAD(svm.LinearSVR):
-    """
-    Least Absolute Deviation
-    """
+        def fit(self, X, y):
+            self.unique_y_ = np.unique(y)
+            svm.LinearSVR.fit(self, X, y)
+            return self
 
-    def fit(self, X, y):
-        self.unique_y_ = np.unique(y)
-        svm.LinearSVR.fit(self, X, y)
-        return self
+        def predict(self, X):
+            pred = np.round(super(svm.LinearSVR, self).predict(X))
+            pred = np.clip(pred, 0, self.unique_y_.max())
+            return pred
 
-    def predict(self, X):
-        pred = np.round(super(svm.LinearSVR, self).predict(X))
-        pred = np.clip(pred, 0, self.unique_y_.max())
-        return pred
-
-    def score(self, X, y):
-        pred = self.predict(X)
-        return METRIC(y, pred)
+        def score(self, X, y):
+            pred = self.predict(X)
+            return METRIC(y, pred)
 
 
