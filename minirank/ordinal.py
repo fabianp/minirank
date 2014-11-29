@@ -97,6 +97,7 @@ def obj_multiclass(x0, X, y, alpha, n_class):
 
     L = np.abs(np.arange(n_class)[:, None] - np.arange(n_class))
     obj = (L[y] * log_loss(-X.dot(W))).sum() / float(n_samples)
+
     Wt = W[:n_features]
     penalty = alpha * np.trace(Wt.T.dot(Wt))
     return obj + penalty
@@ -172,7 +173,7 @@ def multiclass_fit(X, y, alpha, n_class, maxiter=100000):
     y = np.asarray(y) # XXX check its made of integers
     n_samples, n_features = X.shape
 
-    x0 = np.zeros((n_features + 1) * (n_class - 1))
+    x0 = np.random.randn((n_features + 1) * (n_class - 1))
     options = {'maxiter' : maxiter}
     sol = optimize.minimize(obj_multiclass, x0, jac=False,
         args=(X, y, alpha, n_class), method='L-BFGS-B',
@@ -180,6 +181,8 @@ def multiclass_fit(X, y, alpha, n_class, maxiter=100000):
     if not sol.success:
         print(sol.message)
     W = sol.x.reshape((n_features + 1, n_class-1))
+    Wk = - W.sum(1)[:, None]
+    W = np.concatenate((W, Wk), axis=1)
     return W
 
 def multiclass_predict(X, W):
@@ -237,11 +240,11 @@ if __name__ == '__main__':
     np.random.seed(0)
     from sklearn import datasets, metrics, svm, cross_validation
     n_class = 3
-    n_samples = 100
+    n_samples = 10
 
 
     X, y = datasets.make_classification(n_samples=n_samples,
-        n_informative=5, n_classes=n_class, n_features=10)
+        n_informative=5, n_classes=n_class, n_features=20)
 
     print X.shape
     print y
@@ -261,7 +264,7 @@ if __name__ == '__main__':
         pred = threshold_predict(X[test], w, theta)
         print metrics.mean_absolute_error(pred, y[test])
 
-        W = multiclass_fit(X[train], y[train], 1., n_class)
+        W = multiclass_fit(X[train], y[train], 0., n_class)
         pred = multiclass_predict(X[test], W)
         print metrics.mean_absolute_error(pred, y[test])
         break
