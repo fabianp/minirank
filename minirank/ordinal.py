@@ -97,7 +97,8 @@ def obj_multiclass(x0, X, y, alpha, n_class):
 
     L = np.abs(np.arange(n_class)[:, None] - np.arange(n_class))
     obj = (L[y] * log_loss(-X.dot(W))).sum() / float(n_samples)
-    penalty = alpha * np.trace(X.T.dot(X))
+    Wt = W[:n_features]
+    penalty = alpha * np.trace(Wt.T.dot(Wt))
     return obj + penalty
 
 
