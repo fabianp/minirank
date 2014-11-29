@@ -94,12 +94,13 @@ def obj_multiclass(x0, X, y, alpha, n_class):
     Wk = - W.sum(1)[:, None]
     W = np.concatenate((W, Wk), axis=1)
     X = np.concatenate((X, np.ones((n_samples, 1))), axis=1)
-    Y = np.empty((n_samples, n_class))
+    Y = np.zeros((n_samples, n_class))
     Y[:] = - 1./(n_class - 1)
-    Y[y] = 1.
+    for i in range(n_samples):
+        Y[i, y[i]] = 1.
 
     L = np.abs(np.arange(n_class)[:, None] - np.arange(n_class))
-    obj = (L[y] * log_loss(Y-X.dot(W))).sum() / float(n_samples)
+    obj = (L[y] * np.fmax(X.dot(W) - Y, 0)).sum() / float(n_samples)
 
     Wt = W[:n_features]
     penalty = alpha * np.trace(Wt.T.dot(Wt))
@@ -243,11 +244,18 @@ if __name__ == '__main__':
     np.random.seed(0)
     from sklearn import datasets, metrics, svm, cross_validation
     n_class = 3
-    n_samples = 1000
+    n_samples = 20
+    n_dim = 10
 
+    X, y = datasets.make_regression(n_samples=n_samples, n_features=n_dim,
+        n_informative=n_dim // 10)
 
-    X, y = datasets.make_classification(n_samples=n_samples,
-        n_informative=5, n_classes=n_class, n_features=20)
+    bins = stats.mstats.mquantiles(y, np.linspace(0, 1, n_class + 1))
+    y = np.digitize(y, bins[:-1])
+    y -= np.min(y)
+
+    #X, y = datasets.make_classification(n_samples=n_samples,
+        #n_informative=5, n_classes=n_class, n_features=20)
 
     print X.shape
     print y
@@ -261,6 +269,7 @@ if __name__ == '__main__':
 
     cv = cross_validation.KFold(y.size)
     for train, test in cv:
+        test = train
         w, theta = threshold_fit(X[train], y[train], 0., n_class, mode='AE',
                                  bounds=False)
         pred = threshold_predict(X[test], w, theta)
@@ -268,6 +277,7 @@ if __name__ == '__main__':
 
         W = multiclass_fit(X[train], y[train], 0., n_class)
         pred = multiclass_predict(X[test], W)
+        print pred, y[test]
         print metrics.mean_absolute_error(pred, y[test])
         break
 
