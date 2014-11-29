@@ -88,6 +88,12 @@ def grad_margin(x0, X, y, alpha, n_class, weights):
 
 
 
+def obj_multiclass(x0, X, y, alpha, n_class):
+    n_samples, n_features = X.shape
+    W = x0.reshape((n_features + 1, n_class))
+    
+
+
 def threshold_fit(X, y, alpha, n_class, mode='AE', verbose=False, 
                   maxiter=10000, bounds=False):
     """
@@ -140,6 +146,9 @@ def threshold_predict(X, w, theta):
     tmp = theta[:, None] - Xw
     pred = np.sum(tmp <= 0, axis=0).astype(np.int)
     return pred
+
+
+def multiclass_fit(X, y, alpha, n_class):
 
 
 class MarginOR(base.BaseEstimator):

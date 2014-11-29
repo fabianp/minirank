@@ -38,11 +38,7 @@ class RidgeOR(linear_model.Ridge):
         pred = self.predict(X)
         return METRIC(y, pred)
 
-class LogisticOR(linear_model.LogisticRegression):
 
-    def score(self, X, y):
-        pred = self.predict(X)
-        return METRIC(y, pred)
 
 class LAD(svm.LinearSVR):
     """
