@@ -240,7 +240,7 @@ if __name__ == '__main__':
     np.random.seed(0)
     from sklearn import datasets, metrics, svm, cross_validation
     n_class = 3
-    n_samples = 10
+    n_samples = 1000
 
 
     X, y = datasets.make_classification(n_samples=n_samples,
@@ -258,8 +258,7 @@ if __name__ == '__main__':
 
     cv = cross_validation.KFold(y.size)
     for train, test in cv:
-        test = train
-        w, theta = threshold_fit(X[train], y[train], 1., n_class, mode='AE',
+        w, theta = threshold_fit(X[train], y[train], 0., n_class, mode='AE',
                                  bounds=False)
         pred = threshold_predict(X[test], w, theta)
         print metrics.mean_absolute_error(pred, y[test])
