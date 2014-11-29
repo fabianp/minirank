@@ -93,10 +93,10 @@ def obj_multiclass(x0, X, y, alpha, n_class):
     W = x0.reshape((n_features + 1, n_class-1))
     Wk = - W.sum(1)[:, None]
     W = np.concatenate((W, Wk), axis=1)
-    X = np.concatenate((X, np.ones((n_samples, 1)) / float(n_samples)), axis=1)
+    X = np.concatenate((X, np.ones((n_samples, 1))), axis=1)
 
     L = np.abs(np.arange(n_class)[:, None] - np.arange(n_class))
-    obj = L[y] * log_loss(X.dot(W))
+    obj = (L[y] * log_loss(-X.dot(W))).sum()
     penalty = alpha * np.trace(X.T.dot(X))
     return obj + penalty
 
@@ -158,7 +158,15 @@ def threshold_predict(X, w, theta):
     return pred
 
 
-def multiclass_fit(X, y, alpha, n_class):
+def multiclass_fit(X, y, alpha, n_class, maxiter=100000):
+    """
+    Multiclass classification with absolute error cost
+
+    Lee, Yoonkyung, Yi Lin, and Grace Wahba. "Multicategory support
+    vector machines: Theory and application to the classification of
+    microarray data and satellite radiance data." Journal of the
+    American Statistical Association 99.465 (2004): 67-81.
+    """
     X = np.asarray(X)
     y = np.asarray(y) # XXX check its made of integers
     n_samples, n_features = X.shape
@@ -166,13 +174,19 @@ def multiclass_fit(X, y, alpha, n_class):
 
     x0 = np.zeros((n_features + 1) * (n_class - 1))
     options = {'maxiter' : maxiter}
-    sol = optimize.minimize(obj_multiclass, x0,
+    sol = optimize.minimize(obj_multiclass, x0, jac=False,
         args=(X, y, alpha, n_class), method='L-BFGS-B',
         options=options)
     if not sol.success:
         print(sol.message)
     W = sol.x.reshape((n_features + 1, n_class-1))
     return W
+
+def multiclass_predict(X, W):
+    n_samples, n_features = X.shape
+    X = np.concatenate((X, np.ones((n_samples, 1))), axis=1)
+    XW = X.dot(W)
+    return np.argmax(XW, axis=1)
 
 
 class MarginOR(base.BaseEstimator):
@@ -202,12 +216,12 @@ if __name__ == '__main__':
 
     np.random.seed(0)
     from sklearn import datasets, metrics, svm, cross_validation
-    n_class = 5
+    n_class = 3
     n_samples = 100
 
 
     X, y = datasets.make_classification(n_samples=n_samples,
-        n_informative=20, n_classes=n_class, n_features=100)
+        n_informative=5, n_classes=n_class, n_features=10)
 
     print X.shape
     print y
@@ -221,16 +235,14 @@ if __name__ == '__main__':
 
     cv = cross_validation.KFold(y.size)
     for train, test in cv:
-        w, theta = threshold_fit(X[train], y[train], 1., n_class, mode='0-1',
+        test = train
+        w, theta = threshold_fit(X[train], y[train], 1., n_class, mode='AE',
                                  bounds=False)
-        print(np.argsort(theta))
-        print(theta)
         pred = threshold_predict(X[test], w, theta)
-        # print metrics.mean_absolute_error(pred, y)
-        print metrics.accuracy_score(pred, y[test])
+        print metrics.mean_absolute_error(pred, y[test])
 
-        pred = svm.LinearSVC().fit(X[train], y[train]).predict(X[test])
-        print metrics.accuracy_score(pred, y[test])
-        print
-
+        W = multiclass_fit(X[train], y[train], 1., n_class)
+        pred = multiclass_predict(X[test], W)
+        print metrics.mean_absolute_error(pred, y[test])
+        break
 
