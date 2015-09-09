@@ -275,6 +275,7 @@ if __name__ == '__main__':
         w, theta = ordinal_logistic_fit(X[train], y[train], verbose=True,
                                         solver='TNC')
         pred = ordinal_logistic_predict(w, theta, X[test])
+        1/0
         s = metrics.mean_absolute_error(y[test], pred)
         print('ERROR (ORDINAL)  fold %s: %s' % (i+1, s))
         score_ordinal_logistic.append(s)
