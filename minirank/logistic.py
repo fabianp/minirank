@@ -251,7 +251,8 @@ if __name__ == '__main__':
 ================================================================================
     """
     print(DOC)
-    from sklearn import cross_validation, datasets
+    from sklearn.model_selection import ShuffleSplit
+    from sklearn import datasets
     boston = datasets.load_boston()
     X, y = boston.data, np.round(boston.target)
     #X -= X.mean()
@@ -260,7 +261,7 @@ if __name__ == '__main__':
     idx = np.argsort(y)
     X = X[idx]
     y = y[idx]
-    cv = cross_validation.ShuffleSplit(y.size, n_iter=50, test_size=.1, random_state=0)
+    cv = ShuffleSplit(y.size, n_iter=50, test_size=.1, random_state=0)
     score_logistic = []
     score_ordinal_logistic = []
     score_ridge = []
